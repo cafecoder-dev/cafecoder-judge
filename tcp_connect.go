@@ -265,6 +265,19 @@ func executeJudge(csv []string) {
 		args   = csv 
 	)
 
+	/*validation_chack*/
+	for i, _ := range args {
+		if checkRegexp("[^(A-Za-z0-9_/\\.)]+", strings.TrimSpace(args[i])) == true {
+			fmtWriter(submit.resultBuffer, "%s,-1,undef,%s,0,", submit.sessionID, result[6])
+			fmtWriter(submit.errBuffer, "Inputs are included another characters[0-9],[a-z],[A-Z],'.','/','_'\n")
+			passResultTCP(submit, BACKEND_HOST_PORT)
+			return
+		}
+	}
+
+	if len(args) > 1 {
+		submit.sessionID = args[1]
+	}
 	if len(args) > 6 {
 		fmtWriter(submit.resultBuffer, "%s,-1,undef,%s,0,", submit.sessionID, result[6])
 		fmtWriter(submit.errBuffer, "too many args\n")
@@ -277,16 +290,7 @@ func executeJudge(csv []string) {
 		return
 	}
 
-	/*validation_chack*/
-	submit.sessionID = args[1]
-	for i := 2; i <= 5; i++ {
-		if checkRegexp("[^(A-Z|a-z|0-9|_|/|.)]", args[i]) == true {
-			fmtWriter(submit.resultBuffer, "%s,-1,undef,%s,0,", submit.sessionID, result[6])
-			fmtWriter(submit.errBuffer, "Inputs are included another characters[0-9],[a-z],[A-Z],'.','/','_'\n")
-			passResultTCP(submit, BACKEND_HOST_PORT)
-			return
-		}
-	}
+	
 
 	submit.usercodePath = args[2]
 	submit.lang, _ = strconv.Atoi(args[3])
