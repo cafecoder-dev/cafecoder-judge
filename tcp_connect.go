@@ -289,9 +289,7 @@ func executeJudge(csv []string) {
 		passResultTCP(submit, BACKEND_HOST_PORT)
 		return
 	}
-
 	
-
 	submit.usercodePath = args[2]
 	submit.lang, _ = strconv.Atoi(args[3])
 	submit.testcaseDirPath = args[4]
