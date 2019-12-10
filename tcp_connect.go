@@ -33,10 +33,36 @@ type submitT struct {
 	overallTime  int64
 	testcaseCnt  int
 	memoryUsed   int
+	errBuffer    *bytes.Buffer
+	resultBuffer    *bytes.Buffer
 }
-
+const (
+	BACKEND_HOST_PORT = "localhost:5963"
+)
 func checkRegexp(reg, str string) bool {
 	return regexp.MustCompile(reg).Match([]byte(str))
+}
+
+func fmtWriter(buf *bytes.Buffer, format string, values ... interface{}) {
+	arg := fmt.Sprintf(format, values)
+	(*buf).WriteString(arg + "\n")
+}
+
+func passResultTCP(submit submitT, hostAndPort string){
+	conn , err := net.Dial("tcp", hostAndPort)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	conn.Write([]byte(submit.resultBuffer.String()))
+	conn.Close()
+	conn , err = net.Dial("tcp", hostAndPort)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	conn.Write([]byte("error," + submit.sessionID +"," + submit.errBuffer.String()))
+	conn.Close()
 }
 
 func compile(submit *submitT) int {
@@ -49,8 +75,8 @@ func compile(submit *submitT) int {
 	mkdirCmd.Stderr = &stderr
 	err := mkdirCmd.Run()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "couldn't execute next command \"mkdir cafecoderUsers/****\"\n")
-		fmt.Fprintf(os.Stderr, "%s\n", stderr.String())
+		fmtWriter(submit.errBuffer, "couldn't execute next command \"mkdir cafecoderUsers/****\"\n")
+		fmtWriter(submit.errBuffer, "%s\n", stderr.String())
 		return -2
 	}
 	os.Mkdir("../judge_server/tmp/"+submit.sessionID, 0777)
@@ -59,7 +85,7 @@ func compile(submit *submitT) int {
 	cpCmd.Stderr = &stderr
 	err = cpCmd.Run()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "%s", stderr.String())
+		fmtWriter(submit.errBuffer, "%s", stderr.String())
 	}
 	switch submit.lang {
 	case 0: //C11
@@ -92,7 +118,7 @@ func compile(submit *submitT) int {
 	if submit.lang != 5 {
 		err = compileCmd.Run()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "%s\n", stderr.String())
+			fmtWriter(submit.errBuffer, "%s\n", stderr.String())
 			return -1
 		}
 	}
@@ -100,7 +126,7 @@ func compile(submit *submitT) int {
 	chownErr := exec.Command("docker", "exec", "-i", "ubuntuForJudge", "chown", "rbash_user", submit.execFilePath).Run()
 	chmodErr := exec.Command("docker", "exec", "-i", "ubuntuForJudge", "chmod", "4777", submit.execFilePath).Run()
 	if chownErr != nil || chmodErr != nil {
-		fmt.Fprintf(os.Stderr, "failed to give permission\n")
+		fmtWriter(submit.errBuffer, "failed to give permission\n")
 		return -2
 	}
 
@@ -115,7 +141,7 @@ func tryTestcase(submit *submitT) int {
 
 	testcaseListFp, err := os.Open(submit.testcaseDirPath + "/testcase_list.txt")
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to open"+submit.testcaseDirPath+"/testcase_list.txt\n")
+		fmtWriter(submit.errBuffer, "failed to open"+submit.testcaseDirPath+"/testcase_list.txt\n")
 		return -1
 	}
 
@@ -134,7 +160,7 @@ func tryTestcase(submit *submitT) int {
 	submit.overallResult = 0
 
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "%s\n", err)
+		fmtWriter(submit.errBuffer, "%s\n", err)
 		return -1
 	}
 
@@ -142,14 +168,14 @@ func tryTestcase(submit *submitT) int {
 		testcaseName[i] = strings.TrimSpace(testcaseName[i]) //delete \n\r
 		outputTestcase, err := ioutil.ReadFile(submit.testcaseDirPath + "/out/" + testcaseName[i])
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "%s\n", err)
+			fmtWriter(submit.errBuffer, "%s\n", err)
 			return -1
 		}
 
 		testcaseCpCmd := exec.Command("docker", "cp", submit.testcaseDirPath+"/in/"+testcaseName[i], "ubuntuForJudge:/cafecoderUsers/"+submit.sessionID+"/testcase.txt")
 		err = testcaseCpCmd.Run()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "%s\n", err)
+			fmtWriter(submit.errBuffer, "%s\n", err)
 			return -1
 		}
 
@@ -159,17 +185,17 @@ func tryTestcase(submit *submitT) int {
 		exec.Command("docker", "cp", "ubuntuForJudge:/cafecoderUsers/"+submit.sessionID+"/.", "../judge_server/tmp/"+submit.sessionID).Run()
 		userStdout, err := exec.Command("cat", "../judge_server/tmp/"+submit.sessionID+"/userStdout.txt").Output()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "1:%s\n", stderr.String())
+			fmtWriter(submit.errBuffer, "1:%s\n", stderr.String())
 			return -1
 		}
 		userStderr, err := exec.Command("cat", "../judge_server/tmp/"+submit.sessionID+"/userStderr.txt").Output()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "2:%s\n", err)
+			fmtWriter(submit.errBuffer, "2:%s\n", err)
 			return -1
 		}
 		userTime, err := exec.Command("cat", "../judge_server/tmp/"+submit.sessionID+"/userTime.txt").Output()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "3:%s\n", err)
+			fmtWriter(submit.errBuffer, "3:%s\n", err)
 			return -1
 		}
 
@@ -177,8 +203,8 @@ func tryTestcase(submit *submitT) int {
 		tmpInt64, parseerr := strconv.ParseInt(string(userTime), 10, 64)
 		submit.testcaseTime[i] = tmpInt64
 		if parseerr != nil {
-			fmt.Fprintf(os.Stderr, "%s\n", string(userTime))
-			fmt.Fprintf(os.Stderr, "%s\n", parseerr)
+			fmtWriter(submit.errBuffer, "%s\n", string(userTime))
+			fmtWriter(submit.errBuffer, "%s\n", parseerr)
 			return -1
 		}
 		if submit.overallTime < submit.testcaseTime[i] {
@@ -192,7 +218,7 @@ func tryTestcase(submit *submitT) int {
 		if submit.testcaseTime[i] <= 2000 {
 			if runtimeErr != nil || string(userStderr) != "" {
 				for j := 0; j < len(userStderrLines); j++ {
-					fmt.Fprintf(os.Stderr, "%s\n", userStderrLines[j])
+					fmtWriter(submit.errBuffer, "%s\n", userStderrLines[j])
 				}
 				submit.testcaseResult[i] = 3 //RE
 			} else {
@@ -230,21 +256,23 @@ func deleteUserCode(submit submitT) {
 	exec.Command("docker", "exec", "-i", "ubuntuForJudge", "rm", "cafecoderUsers/"+submit.sessionID+"/Main"+submit.langExtention).Run()
 }
 
-func executeJudge() {
+func executeJudge(csv []string) {
 	var (
 		result = [...]string{"AC", "WA", "TLE", "RE", "MLE", "CE", "IE"}
 		lang   = [...]string{".c", ".cpp", ".java", ".py", ".cs", ".rb"}
-		submit submitT
-		args   = os.Args
+		submit = submitT{errBuffer: new(bytes.Buffer), resultBuffer: new(bytes.Buffer)}
+		args   = csv 
 	)
 
 	if len(args) > 6 {
-		fmt.Fprintf(os.Stdout, "%s,-1,undef,%s,0,", submit.sessionID, result[6])
-		fmt.Fprintf(os.Stderr, "too many args\n")
+		fmtWriter(submit.resultBuffer, "%s,-1,undef,%s,0,", submit.sessionID, result[6])
+		fmtWriter(submit.errBuffer, "too many args\n")
+		passResultTCP(submit, BACKEND_HOST_PORT)
 		return
 	} else if len(args) < 6 {
-		fmt.Fprintf(os.Stdout, "%s,-1,undef,%s,0,", submit.sessionID, result[6])
-		fmt.Fprintf(os.Stderr, "too few args\n")
+		fmtWriter(submit.resultBuffer, "%s,-1,undef,%s,0,", submit.sessionID, result[6])
+		fmtWriter(submit.errBuffer, "too few args\n")
+		passResultTCP(submit, BACKEND_HOST_PORT)
 		return
 	}
 
@@ -252,8 +280,9 @@ func executeJudge() {
 	submit.sessionID = args[1]
 	for i := 2; i <= 5; i++ {
 		if checkRegexp("[^(A-Z|a-z|0-9|_|/|.)]", args[i]) == true {
-			fmt.Fprintf(os.Stdout, "%s,-1,undef,%s,0,", submit.sessionID, result[6])
-			fmt.Fprintf(os.Stderr, "Inputs are included another characters[0-9],[a-z],[A-Z],'.','/','_'\n")
+			fmtWriter(submit.resultBuffer, "%s,-1,undef,%s,0,", submit.sessionID, result[6])
+			fmtWriter(submit.errBuffer, "Inputs are included another characters[0-9],[a-z],[A-Z],'.','/','_'\n")
+			passResultTCP(submit, BACKEND_HOST_PORT)
 			return
 		}
 	}
@@ -268,25 +297,28 @@ func executeJudge() {
 
 	ret := compile(&submit)
 	if ret == -2 {
-		fmt.Fprintf(os.Stdout, "%s,-1,undef,%s,0,", submit.sessionID, result[6])
+		fmtWriter(submit.resultBuffer, "%s,-1,undef,%s,0,", submit.sessionID, result[6])
+		passResultTCP(submit, BACKEND_HOST_PORT)
 		return
 	} else if ret == -1 {
-		fmt.Fprintf(os.Stdout, "%s,-1,undef,%s,0,", submit.sessionID, result[5])
+		fmtWriter(submit.resultBuffer, "%s,-1,undef,%s,0,", submit.sessionID, result[5])
+		passResultTCP(submit, BACKEND_HOST_PORT)
 		return
 	}
 	ret = tryTestcase(&submit)
 	if ret == -1 {
-		fmt.Fprintf(os.Stdout, "%s,-1,undef,%s,0,", submit.sessionID, result[6])
+		fmtWriter(submit.resultBuffer, "%s,-1,undef,%s,0,", submit.sessionID, result[6])
+		passResultTCP(submit, BACKEND_HOST_PORT)
 		return
 	} else {
-		fmt.Fprintf(os.Stdout, "%s,%d,undef,%s,", submit.sessionID, submit.overallTime, result[submit.overallResult])
+		fmtWriter(submit.resultBuffer, "%s,%d,undef,%s,", submit.sessionID, submit.overallTime, result[submit.overallResult])
 		if submit.overallResult == 0 {
-			fmt.Fprintf(os.Stdout, "%d,", submit.score)
+			fmtWriter(submit.resultBuffer, "%d,", submit.score)
 		} else {
-			fmt.Fprintf(os.Stdout, "0,")
+			fmtWriter(submit.resultBuffer, "0,")
 		}
 		for i := 0; i < submit.testcaseCnt; i++ {
-			fmt.Fprintf(os.Stdout, "%s,%d,", result[submit.testcaseResult[i]], submit.testcaseTime[i])
+			fmtWriter(submit.resultBuffer, "%s,%d,", result[submit.testcaseResult[i]], submit.testcaseTime[i])
 		}
 	}
 }
@@ -306,6 +338,6 @@ func main() {
 		//reader := csv.NewReader(messageLen)
 		cnct.Close()
 		println("connection closed")
-		go executeJudge()
+		go executeJudge(strings.Split(message, ","))
 	}
 }
