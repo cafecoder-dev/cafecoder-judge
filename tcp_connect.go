@@ -338,6 +338,6 @@ func main() {
 		//reader := csv.NewReader(messageLen)
 		cnct.Close()
 		println("connection closed")
-		go executeJudge(strings.Split(message, ","))
+		go executeJudge(strings.Split("dummy,"+message, ","))
 	}
 }
