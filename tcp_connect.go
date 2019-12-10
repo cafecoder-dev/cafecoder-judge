@@ -44,7 +44,8 @@ func checkRegexp(reg, str string) bool {
 }
 
 func fmtWriter(buf *bytes.Buffer, format string, values ... interface{}) {
-	arg := fmt.Sprintf(format, values)
+	arg := fmt.Sprintf(format, values...)
+	fmt.Printf(format + "\n",values...)
 	(*buf).WriteString(arg + "\n")
 }
 
@@ -258,7 +259,7 @@ func deleteUserCode(submit submitT) {
 
 func executeJudge(csv []string) {
 	var (
-		result = [...]string{"AC", "WA", "TLE", "RE", "MLE", "CE", "IE"}
+		result = []string{"AC", "WA", "TLE", "RE", "MLE", "CE", "IE"}
 		lang   = [...]string{".c", ".cpp", ".java", ".py", ".cs", ".rb"}
 		submit = submitT{errBuffer: new(bytes.Buffer), resultBuffer: new(bytes.Buffer)}
 		args   = csv 
