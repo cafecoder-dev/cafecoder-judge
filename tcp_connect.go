@@ -5,6 +5,12 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"regexp"
+	"os/exec"
+	"bytes"
+	"strings"
+	"io/ioutil"
+	"strconv"
 )
 
 type submitT struct {
