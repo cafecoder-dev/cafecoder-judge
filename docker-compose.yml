@@ -1,0 +1,6 @@
+version: '3.3'
+services:
+  judge:
+    build: .
+    container_name: ubuntuForJudge
+    tty: true

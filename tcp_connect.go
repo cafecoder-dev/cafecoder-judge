@@ -56,12 +56,6 @@ func passResultTCP(submit submitT, hostAndPort string){
 		return
 	}
 	conn.Write([]byte(submit.resultBuffer.String()))
-	conn.Close()
-	conn , err = net.Dial("tcp", hostAndPort)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
 	conn.Write([]byte("error," + submit.sessionID +"," + submit.errBuffer.String()))
 	conn.Close()
 }
@@ -262,12 +256,13 @@ func executeJudge(csv []string) {
 		result = []string{"AC", "WA", "TLE", "RE", "MLE", "CE", "IE"}
 		lang   = [...]string{".c", ".cpp", ".java", ".py", ".cs", ".rb"}
 		submit = submitT{errBuffer: new(bytes.Buffer), resultBuffer: new(bytes.Buffer)}
-		args   = csv 
+		args   = csv
 	)
 
 	/*validation_chack*/
 	for i, _ := range args {
-		if checkRegexp("[^(A-Za-z0-9_/\\.)]+", strings.TrimSpace(args[i])) == true {
+        fmt.Println(args[i])
+		if checkRegexp(`[^(A-Za-z0-9_\/\.=)]+`, strings.TrimSpace(args[i])) == true {
 			fmtWriter(submit.resultBuffer, "%s,-1,undef,%s,0,", submit.sessionID, result[6])
 			fmtWriter(submit.errBuffer, "Inputs are included another characters[0-9],[a-z],[A-Z],'.','/','_'\n")
 			passResultTCP(submit, BACKEND_HOST_PORT)
@@ -278,18 +273,18 @@ func executeJudge(csv []string) {
 	if len(args) > 1 {
 		submit.sessionID = args[1]
 	}
-	if len(args) > 6 {
+	if len(args) > 7 {
 		fmtWriter(submit.resultBuffer, "%s,-1,undef,%s,0,", submit.sessionID, result[6])
 		fmtWriter(submit.errBuffer, "too many args\n")
 		passResultTCP(submit, BACKEND_HOST_PORT)
 		return
-	} else if len(args) < 6 {
+	} else if len(args) < 7 {
 		fmtWriter(submit.resultBuffer, "%s,-1,undef,%s,0,", submit.sessionID, result[6])
 		fmtWriter(submit.errBuffer, "too few args\n")
 		passResultTCP(submit, BACKEND_HOST_PORT)
 		return
 	}
-	
+
 	submit.usercodePath = args[2]
 	submit.lang, _ = strconv.Atoi(args[3])
 	submit.testcaseDirPath = args[4]
@@ -341,6 +336,6 @@ func main() {
 		//reader := csv.NewReader(messageLen)
 		cnct.Close()
 		println("connection closed")
-		go executeJudge(strings.Split("dummy,"+message, ","))
+		go executeJudge(strings.Split(message, ","))
 	}
 }
