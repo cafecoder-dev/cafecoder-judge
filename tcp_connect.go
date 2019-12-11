@@ -2,15 +2,21 @@ package main
 
 import (
 	"bufio"
+	"bytes"
+	"context"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"os"
-	"regexp"
 	"os/exec"
-	"bytes"
-	"strings"
-	"io/ioutil"
+	"regexp"
 	"strconv"
+	"strings"
+
+	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/network"
+	"github.com/docker/docker/client"
 )
 
 type submitT struct {
@@ -34,29 +40,46 @@ type submitT struct {
 	testcaseCnt  int
 	memoryUsed   int
 	errBuffer    *bytes.Buffer
-	resultBuffer    *bytes.Buffer
+	resultBuffer *bytes.Buffer
+	cli          *client.Client
+	ctx          context.Context
 }
+
 const (
 	BACKEND_HOST_PORT = "localhost:5963"
 )
+
+func check(ctx context.Context, c *client.Client) {
+
+	containers, err := c.ContainerList(ctx, types.ContainerListOptions{All: true})
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Println("List of containers")
+	for _, container := range containers {
+		fmt.Printf(" - %s (%s)\n", container.ID, container.Image)
+	}
+}
+
 func checkRegexp(reg, str string) bool {
 	return regexp.MustCompile(reg).Match([]byte(str))
 }
 
-func fmtWriter(buf *bytes.Buffer, format string, values ... interface{}) {
+func fmtWriter(buf *bytes.Buffer, format string, values ...interface{}) {
 	arg := fmt.Sprintf(format, values...)
-	fmt.Printf(format + "\n",values...)
+	fmt.Printf(format+"\n", values...)
 	(*buf).WriteString(arg + "\n")
 }
 
-func passResultTCP(submit submitT, hostAndPort string){
-	conn , err := net.Dial("tcp", hostAndPort)
+func passResultTCP(submit submitT, hostAndPort string) {
+	conn, err := net.Dial("tcp", hostAndPort)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 	conn.Write([]byte(submit.resultBuffer.String()))
-	conn.Write([]byte("error," + submit.sessionID +"," + submit.errBuffer.String()))
+	conn.Write([]byte("error," + submit.sessionID + "," + submit.errBuffer.String()))
 	conn.Close()
 }
 
@@ -257,11 +280,12 @@ func executeJudge(csv []string) {
 		lang   = [...]string{".c", ".cpp", ".java", ".py", ".cs", ".rb"}
 		submit = submitT{errBuffer: new(bytes.Buffer), resultBuffer: new(bytes.Buffer)}
 		args   = csv
+		err    error
 	)
 
 	/*validation_chack*/
 	for i, _ := range args {
-        fmt.Println(args[i])
+		fmt.Println(args[i])
 		if checkRegexp(`[^(A-Za-z0-9_\/\.=)]+`, strings.TrimSpace(args[i])) == true {
 			fmtWriter(submit.resultBuffer, "%s,-1,undef,%s,0,", submit.sessionID, result[6])
 			fmtWriter(submit.errBuffer, "Inputs are included another characters[0-9],[a-z],[A-Z],'.','/','_'\n")
@@ -290,6 +314,32 @@ func executeJudge(csv []string) {
 	submit.testcaseDirPath = args[4]
 	submit.score, _ = strconv.Atoi(args[5])
 	submit.langExtention = lang[submit.lang]
+
+	/*about docker*/
+	submit.ctx = context.Background()
+	submit.cli, err = client.NewClientWithOpts(client.WithVersion("1.40"))
+	if err != nil {
+		fmtWriter(submit.errBuffer, "%s\n", err)
+	}
+	//cli.NegotiateAPIVersion(ctx)
+
+	config := &container.Config{
+		Image: "cafecoder",
+	}
+	hostConfig := &container.HostConfig{}
+	netConfig := &network.NetworkingConfig{}
+	resp, err := submit.cli.ContainerCreate(context.TODO(), config, hostConfig, netConfig, "test")
+	if err != nil {
+		fmt.Printf("%s\n", err)
+	}
+	println(">" + resp.ID)
+	err = submit.cli.ContainerStart(context.TODO(), resp.ID, types.ContainerStartOptions{})
+	if err != nil {
+		fmtWriter(submit.errBuffer, "%s\n", err)
+	}
+	check(submit.ctx, submit.cli)
+	os.Exit(0)
+	/*------------*/
 
 	defer deleteUserDir(submit)
 
