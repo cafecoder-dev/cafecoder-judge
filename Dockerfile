@@ -18,3 +18,5 @@ apt install apt-transport-https dirmngr -y && \
 useradd -m rbash_user && \
 mkdir cafecoderUsers && \
 chown rbash_user:rbash_user cafecoderUsers
+
+ENTRYPOINT ["/bin/sh","-c","while :; do sleep 10; done" ]

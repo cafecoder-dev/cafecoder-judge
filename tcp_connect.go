@@ -15,7 +15,6 @@ import (
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
 )
 
@@ -43,6 +42,7 @@ type submitT struct {
 	resultBuffer *bytes.Buffer
 	cli          *client.Client
 	ctx          context.Context
+	containerID  string
 }
 
 const (
@@ -85,68 +85,101 @@ func passResultTCP(submit submitT, hostAndPort string) {
 
 func compile(submit *submitT) int {
 	var (
-		compileCmd *exec.Cmd
-		stderr     bytes.Buffer
+		//compileCmd *exec.Cmd
+		stderr bytes.Buffer
+		idRes  types.IDResponse
+		res    types.HijackedResponse
+		err    error
 	)
 
-	mkdirCmd := exec.Command("docker", "exec", "-i", "ubuntuForJudge", "/bin/bash", "-c", "mkdir cafecoderUsers/"+submit.sessionID)
-	mkdirCmd.Stderr = &stderr
-	err := mkdirCmd.Run()
+	/*
+		mkdirCmd := exec.Command("docker", "exec", "-i", "ubuntuForJudge", "/bin/bash", "-c", "mkdir cafecoderUsers/"+submit.sessionID)
+		mkdirCmd.Stderr = &stderr
+		err := mkdirCmd.Run()
+	*/
+	idRes, err = submit.cli.ContainerExecCreate(context.TODO(), submit.containerID, types.ExecConfig{AttachStdout: true, Cmd: []string{"mkdir", "cafecoderUsers/" + submit.sessionID}})
+	res, err = submit.cli.ContainerExecAttach(context.TODO(), idRes.ID, types.ExecStartCheck{})
 	if err != nil {
 		fmtWriter(submit.errBuffer, "couldn't execute next command \"mkdir cafecoderUsers/****\"\n")
 		fmtWriter(submit.errBuffer, "%s\n", stderr.String())
 		return -2
 	}
-	os.Mkdir("../judge_server/tmp/"+submit.sessionID, 0777)
+	res.Close()
 
-	cpCmd := exec.Command("docker", "cp", submit.usercodePath, "ubuntuForJudge:/cafecoderUsers/"+submit.sessionID+"/Main"+submit.langExtention)
-	cpCmd.Stderr = &stderr
-	err = cpCmd.Run()
-	if err != nil {
-		fmtWriter(submit.errBuffer, "%s", stderr.String())
-	}
+	os.Mkdir("tmp/"+submit.sessionID, 0777)
+
+	/*
+		cpCmd := exec.Command("docker", "cp", submit.usercodePath, "ubuntuForJudge:/cafecoderUsers/"+submit.sessionID+"/Main"+submit.langExtention)
+		cpCmd.Stderr = &stderr
+		err = cpCmd.Run()
+	*/
+	//todo: cp user_code on container
+
 	switch submit.lang {
 	case 0: //C11
-		compileCmd = exec.Command("docker", "exec", "-i", "ubuntuForJudge", "gcc", "/cafecoderUsers/"+submit.sessionID+"/Main.c", "-lm", "-std=gnu11", "-o", "/cafecoderUsers/"+submit.sessionID+"/Main.out")
+		//compileCmd = exec.Command("docker", "exec", "-i", "ubuntuForJudge", "gcc", "/cafecoderUsers/"+submit.sessionID+"/Main.c", "-lm", "-std=gnu11", "-o", "/cafecoderUsers/"+submit.sessionID+"/Main.out")
+		idRes, err = submit.cli.ContainerExecCreate(context.TODO(), submit.containerID, types.ExecConfig{AttachStdout: true, Cmd: []string{"gcc", "/cafecoderUsers/" + submit.sessionID + "/Main.c", "-lm", "-std=gnu11", "-o", "/cafecoderUsers/" + submit.sessionID + "/Main.out"}})
 		submit.execFilePath = "/cafecoderUsers/" + submit.sessionID + "/Main.out"
 		submit.execDirPath = "/cafecoderUsers/" + submit.sessionID
 	case 1: //C++17
-		compileCmd = exec.Command("docker", "exec", "-i", "ubuntuForJudge", "g++", "/cafecoderUsers/"+submit.sessionID+"/Main.cpp", "-lm", "-std=gnu++17", "-o", "/cafecoderUsers/"+submit.sessionID+"/Main.out")
+		//compileCmd = exec.Command("docker", "exec", "-i", "ubuntuForJudge", "g++", "/cafecoderUsers/"+submit.sessionID+"/Main.cpp", "-lm", "-std=gnu++17", "-o", "/cafecoderUsers/"+submit.sessionID+"/Main.out")
+		idRes, err = submit.cli.ContainerExecCreate(context.TODO(), submit.containerID, types.ExecConfig{AttachStdout: true, Cmd: []string{"g++", "/cafecoderUsers/" + submit.sessionID + "/Main.cpp", "-lm", "-std=gnu++17", "-o", "/cafecoderUsers/" + submit.sessionID + "/Main.out"}})
 		submit.execFilePath = "/cafecoderUsers/" + submit.sessionID + "/Main.out"
 		submit.execDirPath = "/cafecoderUsers/" + submit.sessionID
 	case 2: //java8
-		compileCmd = exec.Command("docker", "exec", "-i", "ubuntuForJudge", "javac", "/cafecoderUsers/"+submit.sessionID+"/Main.java", "-d", "/cafecoderUsers/"+submit.sessionID)
+		//compileCmd = exec.Command("docker", "exec", "-i", "ubuntuForJudge", "javac", "/cafecoderUsers/"+submit.sessionID+"/Main.java", "-d", "/cafecoderUsers/"+submit.sessionID)
+		idRes, err = submit.cli.ContainerExecCreate(context.TODO(), submit.containerID, types.ExecConfig{AttachStdout: true, Cmd: []string{"javac", "/cafecoderUsers/" + submit.sessionID + "/Main.java", "-d", "/cafecoderUsers/" + submit.sessionID}})
 		submit.execFilePath = "/cafecoderUsers/" + submit.sessionID + "/Main.class"
 		submit.execDirPath = "/cafecoderUsers/" + submit.sessionID
 	case 3: //python3
-		compileCmd = exec.Command("docker", "exec", "-i", "ubuntuForJudge", "python3", "-m", "py_compile", "/cafecoderUsers/"+submit.sessionID+"/Main.py")
+		//compileCmd = exec.Command("docker", "exec", "-i", "ubuntuForJudge", "python3", "-m", "py_compile", "/cafecoderUsers/"+submit.sessionID+"/Main.py")
+		idRes, err = submit.cli.ContainerExecCreate(context.TODO(), submit.containerID, types.ExecConfig{AttachStdout: true, Cmd: []string{"python3", "-m", "py_compile", "/cafecoderUsers/" + submit.sessionID + "/Main.py"}})
 		submit.execFilePath = "/cafecoderUsers/" + submit.sessionID + "/Main.py"
 		submit.execDirPath = "/cafecoderUsers/" + submit.sessionID
 	case 4: //C#
-		compileCmd = exec.Command("docker", "exec", "-i", "ubuntuForJudge", "mcs", "/cafecoderUsers/"+submit.sessionID+"/Main.cs", "-out:/cafecoderUsers/"+submit.sessionID+"/Main.exe")
+		//compileCmd = exec.Command("docker", "exec", "-i", "ubuntuForJudge", "mcs", "/cafecoderUsers/"+submit.sessionID+"/Main.cs", "-out:/cafecoderUsers/"+submit.sessionID+"/Main.exe")
+		idRes, err = submit.cli.ContainerExecCreate(context.TODO(), submit.containerID, types.ExecConfig{AttachStdout: true, Cmd: []string{"mcs", "/cafecoderUsers/" + submit.sessionID + "/Main.cs", "-out:/cafecoderUsers/" + submit.sessionID + "/Main.exe"}})
 		submit.execFilePath = "/cafecoderUsers/" + submit.sessionID + "/Main.exe"
 		submit.execDirPath = "/cafecoderUsers/" + submit.sessionID
 	case 5: //Ruby
-		compileCmd = exec.Command("docker", "exec", "-i", "ubuntuForJudge", "ruby", "-cw", "/cafecoderUsers/"+submit.sessionID+"/Main.rb")
+		//compileCmd = exec.Command("docker", "exec", "-i", "ubuntuForJudge", "ruby", "-cw", "/cafecoderUsers/"+submit.sessionID+"/Main.rb")
+		idRes, err = submit.cli.ContainerExecCreate(context.TODO(), submit.containerID, types.ExecConfig{AttachStdout: true, Cmd: []string{"ruby", "-cw", "/cafecoderUsers/" + submit.sessionID + "/Main.rb"}})
 		submit.execFilePath = "/cafecoderUsers/" + submit.sessionID + "/Main.rb"
 		submit.execDirPath = "/cafecoderUsers/" + submit.sessionID
 	}
-
-	compileCmd.Stderr = &stderr
+	//compileCmd.Stderr = &stderr
 	if submit.lang != 5 {
-		err = compileCmd.Run()
+		//err = compileCmd.Run()
+		res, err = submit.cli.ContainerExecAttach(context.TODO(), idRes.ID, types.ExecStartCheck{})
 		if err != nil {
-			fmtWriter(submit.errBuffer, "%s\n", stderr.String())
-			return -1
+			fmtWriter(submit.errBuffer, "%s", err)
 		}
+		res.Close()
 	}
-
-	chownErr := exec.Command("docker", "exec", "-i", "ubuntuForJudge", "chown", "rbash_user", submit.execFilePath).Run()
-	chmodErr := exec.Command("docker", "exec", "-i", "ubuntuForJudge", "chmod", "4777", submit.execFilePath).Run()
-	if chownErr != nil || chmodErr != nil {
-		fmtWriter(submit.errBuffer, "failed to give permission\n")
+	/*
+		chownErr := exec.Command("docker", "exec", "-i", "ubuntuForJudge", "chown", "rbash_user", submit.execFilePath).Run()
+		chmodErr := exec.Command("docker", "exec", "-i", "ubuntuForJudge", "chmod", "4777", submit.execFilePath).Run()
+		if chownErr != nil || chmodErr != nil {
+			fmtWriter(submit.errBuffer, "failed to give permission\n")
+			return -2
+		}
+	*/
+	idRes, err = submit.cli.ContainerExecCreate(context.TODO(), submit.containerID, types.ExecConfig{AttachStdout: true, Cmd: []string{"chown", "rbash_user", submit.execFilePath}})
+	res, err = submit.cli.ContainerExecAttach(context.TODO(), idRes.ID, types.ExecStartCheck{})
+	if err != nil {
+		fmtWriter(submit.errBuffer, "failed to give permission\"\n")
+		fmtWriter(submit.errBuffer, "%s\n", err)
 		return -2
 	}
+	res.Close()
+	idRes, err = submit.cli.ContainerExecCreate(context.TODO(), submit.containerID, types.ExecConfig{AttachStdout: true, Cmd: []string{"chmod", "4777", submit.execFilePath}})
+	res, err = submit.cli.ContainerExecAttach(context.TODO(), idRes.ID, types.ExecStartCheck{})
+	if err != nil {
+		fmtWriter(submit.errBuffer, "failed to give permission\"\n")
+		fmtWriter(submit.errBuffer, "%s\n", err)
+		return -2
+	}
+	res.Close()
 
 	return 0
 }
@@ -274,6 +307,24 @@ func deleteUserCode(submit submitT) {
 	exec.Command("docker", "exec", "-i", "ubuntuForJudge", "rm", "cafecoderUsers/"+submit.sessionID+"/Main"+submit.langExtention).Run()
 }
 
+func containerStopAndRemove(cli *client.Client, containerID string, submit submitT) {
+	var err error
+	//timeout := 5 * time.Second
+	err = cli.ContainerStop(context.TODO(), containerID, nil)
+	if err != nil {
+		fmtWriter(submit.errBuffer, "4:%s\n", err)
+	}
+
+	exec.Command("docker", "rm", submit.containerID).Run()
+	//couldn't remove container with docker sdk.
+	/*
+		err = cli.ContainerRemove(context.TODO(), containerID, types.ContainerRemoveOptions{})
+		if err != nil {
+			fmtWriter(submit.errBuffer, "5:%s\n", err)
+		}
+	*/
+}
+
 func executeJudge(csv []string) {
 	var (
 		result = []string{"AC", "WA", "TLE", "RE", "MLE", "CE", "IE"}
@@ -315,31 +366,31 @@ func executeJudge(csv []string) {
 	submit.score, _ = strconv.Atoi(args[5])
 	submit.langExtention = lang[submit.lang]
 
-	/*about docker*/
-	submit.ctx = context.Background()
-	submit.cli, err = client.NewClientWithOpts(client.WithVersion("1.40"))
-	if err != nil {
-		fmtWriter(submit.errBuffer, "%s\n", err)
-	}
-	//cli.NegotiateAPIVersion(ctx)
+	/*--------------------------------about docker--------------------------------*/
 
+	submit.cli, err = client.NewClientWithOpts(client.WithVersion("1.40"))
+	check(context.TODO(), submit.cli) //for debug
+	if err != nil {
+		fmtWriter(submit.errBuffer, "1:%s\n", err)
+	}
 	config := &container.Config{
 		Image: "cafecoder",
 	}
-	hostConfig := &container.HostConfig{}
-	netConfig := &network.NetworkingConfig{}
-	resp, err := submit.cli.ContainerCreate(context.TODO(), config, hostConfig, netConfig, "test")
+	resp, err := submit.cli.ContainerCreate(context.TODO(), config, nil, nil, "test")
 	if err != nil {
-		fmt.Printf("%s\n", err)
+		fmt.Printf("2:%s\n", err)
 	}
-	println(">" + resp.ID)
+	submit.containerID = resp.ID
+
 	err = submit.cli.ContainerStart(context.TODO(), resp.ID, types.ContainerStartOptions{})
 	if err != nil {
-		fmtWriter(submit.errBuffer, "%s\n", err)
+		fmtWriter(submit.errBuffer, "3:%s\n", err)
 	}
-	check(submit.ctx, submit.cli)
-	os.Exit(0)
-	/*------------*/
+
+	defer containerStopAndRemove(submit.cli, resp.ID, submit)
+
+	//check(context.TODO(), submit.cli) //for debug
+	/*----------------------------------------------------------------------------*/
 
 	defer deleteUserDir(submit)
 
