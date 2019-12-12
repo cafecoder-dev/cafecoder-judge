@@ -6,10 +6,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/network"
-	"github.com/docker/docker/client"
 	"io/ioutil"
 	"net"
 	"os"
@@ -18,13 +14,10 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-<<<<<<< HEAD
-=======
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
->>>>>>> 40348a3404d6c1bc633a2d5f1131598e2f6dca77
 )
 
 type submitT struct {
@@ -317,9 +310,6 @@ func deleteUserCode(submit submitT) {
 	exec.Command("docker", "exec", "-i", "ubuntuForJudge", "rm", "cafecoderUsers/"+submit.sessionID+"/Main"+submit.langExtention).Run()
 }
 
-<<<<<<< HEAD
-func executeJudge(csv []string, tftpCli *tftp.Client) {
-=======
 func containerStopAndRemove(cli *client.Client, containerID string, submit submitT) {
 	var err error
 	//timeout := 5 * time.Second
@@ -338,8 +328,7 @@ func containerStopAndRemove(cli *client.Client, containerID string, submit submi
 	*/
 }
 
-func executeJudge(csv []string) {
->>>>>>> 40348a3404d6c1bc633a2d5f1131598e2f6dca77
+func executeJudge(csv []string, tftpCli *tftp.Client) {
 	var (
 		result = []string{"AC", "WA", "TLE", "RE", "MLE", "CE", "IE"}
 		lang   = [...]string{".c", ".cpp", ".java", ".py", ".cs", ".rb"}
@@ -380,15 +369,11 @@ func executeJudge(csv []string) {
 	submit.score, _ = strconv.Atoi(args[5])
 	submit.langExtention = lang[submit.lang]
 
-<<<<<<< HEAD
 	//download file
 	submit.code = tftpwrapper.DownloadFromPath(&tftpCli, submit.usercodePath)
 	/*about docker*/
-	submit.ctx = context.Background()
-=======
 	/*--------------------------------about docker--------------------------------*/
 
->>>>>>> 40348a3404d6c1bc633a2d5f1131598e2f6dca77
 	submit.cli, err = client.NewClientWithOpts(client.WithVersion("1.40"))
 	check(context.TODO(), submit.cli) //for debug
 	if err != nil {
