@@ -1,22 +1,23 @@
 package main
 
 import (
+	"./tftpwrapper"
 	"bufio"
 	"bytes"
 	"context"
 	"fmt"
-	"io/ioutil"
-	"net"
-	"os"
-	"os/exec"
-	"regexp"
-	"strconv"
-	"strings"
-
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
+	"io/ioutil"
+	"net"
+	"os"
+	"os/exec"
+	"pack.ag/tftp"
+	"regexp"
+	"strconv"
+	"strings"
 )
 
 type submitT struct {
@@ -25,6 +26,7 @@ type submitT struct {
 	testcaseDirPath string
 	execDirPath     string
 	execFilePath    string
+	code            []byte
 	score           int
 
 	//0:C 1:C++ 2:Java8 3:Python3 4:C#
@@ -274,7 +276,7 @@ func deleteUserCode(submit submitT) {
 	exec.Command("docker", "exec", "-i", "ubuntuForJudge", "rm", "cafecoderUsers/"+submit.sessionID+"/Main"+submit.langExtention).Run()
 }
 
-func executeJudge(csv []string) {
+func executeJudge(csv []string, tftpCli *tftp.Client) {
 	var (
 		result = []string{"AC", "WA", "TLE", "RE", "MLE", "CE", "IE"}
 		lang   = [...]string{".c", ".cpp", ".java", ".py", ".cs", ".rb"}
@@ -315,6 +317,8 @@ func executeJudge(csv []string) {
 	submit.score, _ = strconv.Atoi(args[5])
 	submit.langExtention = lang[submit.lang]
 
+	//download file
+	submit.code = tftpwrapper.DownloadFromPath(&tftpCli, submit.usercodePath)
 	/*about docker*/
 	submit.ctx = context.Background()
 	submit.cli, err = client.NewClientWithOpts(client.WithVersion("1.40"))
@@ -376,6 +380,10 @@ func main() {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%s\n", err)
 	}
+	tftpCli, err := tftp.NewClient()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%s\n", err)
+	}
 	for {
 		cnct, err := listen.Accept()
 		if err != nil {
@@ -386,6 +394,6 @@ func main() {
 		//reader := csv.NewReader(messageLen)
 		cnct.Close()
 		println("connection closed")
-		go executeJudge(strings.Split(message, ","))
+		go executeJudge(strings.Split(message, ","), tftpCli)
 	}
 }
