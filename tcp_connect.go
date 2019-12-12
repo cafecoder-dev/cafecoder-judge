@@ -1,7 +1,7 @@
 package main
 
 import (
-	"./tftpwrapper"
+	//"./tftpwrapper"
 	"bufio"
 	"bytes"
 	"context"
@@ -14,7 +14,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-
+	"time"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
@@ -313,19 +313,24 @@ func deleteUserCode(submit submitT) {
 func containerStopAndRemove(cli *client.Client, containerID string, submit submitT) {
 	var err error
 	//timeout := 5 * time.Second
-	err = cli.ContainerStop(context.TODO(), containerID, nil)
+	err = cli.ContainerStop(context.TODO(), submit.containerID, nil)
 	if err != nil {
 		fmtWriter(submit.errBuffer, "4:%s\n", err)
 	}
-
-	exec.Command("docker", "rm", submit.containerID).Run()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	 _, errC := cli.ContainerWait(ctx, submit.containerID, "");
+	if err := <-errC; err != nil {
+		panic(err)
+	}
+	//exec.Command("docker", "rm", submit.containerID).Run()
 	//couldn't remove container with docker sdk.
-	/*
-		err = cli.ContainerRemove(context.TODO(), containerID, types.ContainerRemoveOptions{})
-		if err != nil {
-			fmtWriter(submit.errBuffer, "5:%s\n", err)
-		}
-	*/
+	
+	err = cli.ContainerRemove(context.TODO(), submit.containerID, types.ContainerRemoveOptions{RemoveVolumes: true, RemoveLinks: true, Force: true})
+	if err != nil {
+		fmtWriter(submit.errBuffer, "5:%s\n", err)
+	}
+	
 }
 
 func executeJudge(csv []string, tftpCli *tftp.Client) {
@@ -370,11 +375,11 @@ func executeJudge(csv []string, tftpCli *tftp.Client) {
 	submit.langExtention = lang[submit.lang]
 
 	//download file
-	submit.code = tftpwrapper.DownloadFromPath(&tftpCli, submit.usercodePath)
+	//submit.code = tftpwrapper.DownloadFromPath(&tftpCli, submit.usercodePath)
 	/*about docker*/
 	/*--------------------------------about docker--------------------------------*/
 
-	submit.cli, err = client.NewClientWithOpts(client.WithVersion("1.40"))
+	submit.cli, err = client.NewClientWithOpts(client.WithVersion("1.35"))
 	check(context.TODO(), submit.cli) //for debug
 	if err != nil {
 		fmtWriter(submit.errBuffer, "1:%s\n", err)
