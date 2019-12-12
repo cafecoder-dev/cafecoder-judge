@@ -1,21 +1,30 @@
 package main
 
 import (
+	"./tftpwrapper"
 	"bufio"
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/network"
+	"github.com/docker/docker/client"
 	"io/ioutil"
 	"net"
 	"os"
 	"os/exec"
+	"pack.ag/tftp"
 	"regexp"
 	"strconv"
 	"strings"
+<<<<<<< HEAD
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
+=======
+>>>>>>> dev/douro
 )
 
 type submitT struct {
@@ -24,6 +33,7 @@ type submitT struct {
 	testcaseDirPath string
 	execDirPath     string
 	execFilePath    string
+	code            []byte
 	score           int
 
 	//0:C 1:C++ 2:Java8 3:Python3 4:C#
@@ -307,6 +317,7 @@ func deleteUserCode(submit submitT) {
 	exec.Command("docker", "exec", "-i", "ubuntuForJudge", "rm", "cafecoderUsers/"+submit.sessionID+"/Main"+submit.langExtention).Run()
 }
 
+<<<<<<< HEAD
 func containerStopAndRemove(cli *client.Client, containerID string, submit submitT) {
 	var err error
 	//timeout := 5 * time.Second
@@ -326,6 +337,9 @@ func containerStopAndRemove(cli *client.Client, containerID string, submit submi
 }
 
 func executeJudge(csv []string) {
+=======
+func executeJudge(csv []string, tftpCli *tftp.Client) {
+>>>>>>> dev/douro
 	var (
 		result = []string{"AC", "WA", "TLE", "RE", "MLE", "CE", "IE"}
 		lang   = [...]string{".c", ".cpp", ".java", ".py", ".cs", ".rb"}
@@ -366,8 +380,15 @@ func executeJudge(csv []string) {
 	submit.score, _ = strconv.Atoi(args[5])
 	submit.langExtention = lang[submit.lang]
 
+<<<<<<< HEAD
 	/*--------------------------------about docker--------------------------------*/
 
+=======
+	//download file
+	submit.code = tftpwrapper.DownloadFromPath(&tftpCli, submit.usercodePath)
+	/*about docker*/
+	submit.ctx = context.Background()
+>>>>>>> dev/douro
 	submit.cli, err = client.NewClientWithOpts(client.WithVersion("1.40"))
 	check(context.TODO(), submit.cli) //for debug
 	if err != nil {
@@ -427,6 +448,10 @@ func main() {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%s\n", err)
 	}
+	tftpCli, err := tftp.NewClient()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%s\n", err)
+	}
 	for {
 		cnct, err := listen.Accept()
 		if err != nil {
@@ -437,6 +462,6 @@ func main() {
 		//reader := csv.NewReader(messageLen)
 		cnct.Close()
 		println("connection closed")
-		go executeJudge(strings.Split(message, ","))
+		go executeJudge(strings.Split(message, ","), tftpCli)
 	}
 }
