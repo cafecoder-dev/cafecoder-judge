@@ -6,10 +6,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/network"
-	"github.com/docker/docker/client"
 	"io/ioutil"
 	"net"
 	"os"
@@ -18,6 +14,10 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/client"
 )
 
 type submitT struct {
@@ -310,6 +310,24 @@ func deleteUserCode(submit submitT) {
 	exec.Command("docker", "exec", "-i", "ubuntuForJudge", "rm", "cafecoderUsers/"+submit.sessionID+"/Main"+submit.langExtention).Run()
 }
 
+func containerStopAndRemove(cli *client.Client, containerID string, submit submitT) {
+	var err error
+	//timeout := 5 * time.Second
+	err = cli.ContainerStop(context.TODO(), containerID, nil)
+	if err != nil {
+		fmtWriter(submit.errBuffer, "4:%s\n", err)
+	}
+
+	exec.Command("docker", "rm", submit.containerID).Run()
+	//couldn't remove container with docker sdk.
+	/*
+		err = cli.ContainerRemove(context.TODO(), containerID, types.ContainerRemoveOptions{})
+		if err != nil {
+			fmtWriter(submit.errBuffer, "5:%s\n", err)
+		}
+	*/
+}
+
 func executeJudge(csv []string, tftpCli *tftp.Client) {
 	var (
 		result = []string{"AC", "WA", "TLE", "RE", "MLE", "CE", "IE"}
@@ -354,7 +372,8 @@ func executeJudge(csv []string, tftpCli *tftp.Client) {
 	//download file
 	submit.code = tftpwrapper.DownloadFromPath(&tftpCli, submit.usercodePath)
 	/*about docker*/
-	submit.ctx = context.Background()
+	/*--------------------------------about docker--------------------------------*/
+
 	submit.cli, err = client.NewClientWithOpts(client.WithVersion("1.40"))
 	check(context.TODO(), submit.cli) //for debug
 	if err != nil {
