@@ -6,6 +6,9 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/client"
 	"io/ioutil"
 	"net"
 	"os"
@@ -15,9 +18,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/client"
 )
 
 type submitT struct {
@@ -319,18 +319,18 @@ func containerStopAndRemove(cli *client.Client, containerID string, submit submi
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	 _, errC := cli.ContainerWait(ctx, submit.containerID, "");
+	_, errC := cli.ContainerWait(ctx, submit.containerID, "")
 	if err := <-errC; err != nil {
-		panic(err)
+		fmt.Println(err)
 	}
 	//exec.Command("docker", "rm", submit.containerID).Run()
 	//couldn't remove container with docker sdk.
-	
+
 	err = cli.ContainerRemove(context.TODO(), submit.containerID, types.ContainerRemoveOptions{RemoveVolumes: true, RemoveLinks: true, Force: true})
 	if err != nil {
 		fmtWriter(submit.errBuffer, "5:%s\n", err)
 	}
-	
+
 }
 
 func executeJudge(csv []string, tftpCli *tftp.Client) {
