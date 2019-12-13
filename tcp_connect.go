@@ -6,18 +6,19 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/client"
 	"io/ioutil"
 	"net"
 	"os"
 	"os/exec"
-	"pack.ag/tftp"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/client"
+	"pack.ag/tftp"
 )
 
 type submitT struct {
@@ -121,7 +122,7 @@ func compile(submit *submitT) int {
 	switch submit.lang {
 	case 0: //C11
 		//compileCmd = exec.Command("docker", "exec", "-i", "ubuntuForJudge", "gcc", "/cafecoderUsers/"+submit.sessionID+"/Main.c", "-lm", "-std=gnu11", "-o", "/cafecoderUsers/"+submit.sessionID+"/Main.out")
-		idRes, err = submit.cli.ContainerExecCreate(context.TODO(), submit.containerID, types.ExecConfig{AttachStdout: true, Cmd: []string{"gcc", "/cafecoderUsers/" + submit.sessionID + "/Main.c", "-lm", "-std=gnu11", "-o", "/cafecoderUsers/" + submit.sessionID + "/Main.out"}})
+		idRes, err = submit.cli.ContainerExecCreate(context.TODO(), submit.containerID, types.ExecConfig{AttachStdout: true, Cmd: []string{"gc", "/cafecoderUsers/" + submit.sessionID + "/Main.c", "-lm", "-std=gnu11", "-o", "/cafecoderUsers/" + submit.sessionID + "/Main.out"}})
 		submit.execFilePath = "/cafecoderUsers/" + submit.sessionID + "/Main.out"
 		submit.execDirPath = "/cafecoderUsers/" + submit.sessionID
 	case 1: //C++17
@@ -189,7 +190,7 @@ func compile(submit *submitT) int {
 
 func tryTestcase(submit *submitT) int {
 	var (
-		stderr     bytes.Buffer
+		//stderr     bytes.Buffer
 		runtimeErr error
 	)
 
@@ -226,38 +227,74 @@ func tryTestcase(submit *submitT) int {
 			return -1
 		}
 
-		testcaseCpCmd := exec.Command("docker", "cp", submit.testcaseDirPath+"/in/"+testcaseName[i], "ubuntuForJudge:/cafecoderUsers/"+submit.sessionID+"/testcase.txt")
-		err = testcaseCpCmd.Run()
+		/*
+			testcaseCpCmd := exec.Command("docker", "cp", submit.testcaseDirPath+"/in/"+testcaseName[i], "ubuntuForJudge:/cafecoderUsers/"+submit.sessionID+"/testcase.txt") //copy testcase on container
+			err = testcaseCpCmd.Run()
+			if err != nil {
+				fmtWriter(submit.errBuffer, "%s\n", err)
+				return -1
+			}
+		*/
+		testcaseFile, _ := os.Open(submit.testcaseDirPath + "/in/" + testcaseName[i])
+		submit.cli.CopyToContainer(context.TODO(), submit.sessionID, "/cafecoderUsers/"+submit.sessionID+"/testcase.txt", bufio.NewReader(testcaseFile), types.CopyToContainerOptions{})
+		testcaseFile.Close()
+		/*
+			executeUsercodeCmd := exec.Command("docker", "exec", "-i", "ubuntuForJudge", "./executeUsercode.sh", strconv.Itoa(submit.lang), submit.sessionID)
+			runtimeErr = executeUsercodeCmd.Run()
+		*/
+		idRes, err := submit.cli.ContainerExecCreate(context.TODO(), submit.containerID, types.ExecConfig{AttachStdout: true, Cmd: []string{"./executeUsercode.sh", strconv.Itoa(submit.lang), submit.sessionID}})
+		res, err := submit.cli.ContainerExecAttach(context.TODO(), idRes.ID, types.ExecStartCheck{})
 		if err != nil {
 			fmtWriter(submit.errBuffer, "%s\n", err)
-			return -1
+			return -2
 		}
+		res.Close()
 
-		executeUsercodeCmd := exec.Command("docker", "exec", "-i", "ubuntuForJudge", "./executeUsercode.sh", strconv.Itoa(submit.lang), submit.sessionID)
-		runtimeErr = executeUsercodeCmd.Run()
-
-		exec.Command("docker", "cp", "ubuntuForJudge:/cafecoderUsers/"+submit.sessionID+"/.", "../judge_server/tmp/"+submit.sessionID).Run()
-		userStdout, err := exec.Command("cat", "../judge_server/tmp/"+submit.sessionID+"/userStdout.txt").Output()
+		//exec.Command("docker", "cp", "ubuntuForJudge:/cafecoderUsers/"+submit.sessionID+"/.", "tmp/"+submit.sessionID).Run()
+		/*
+			userStdout, err := exec.Command("cat", "tmp/"+submit.sessionID+"/userStdout.txt").Output()
+			if err != nil {
+				fmtWriter(submit.errBuffer, "1:%s\n", stderr.String())
+				return -1
+			}
+			userStderr, err := exec.Command("cat", "tmp/"+submit.sessionID+"/userStderr.txt").Output()
+			if err != nil {
+				fmtWriter(submit.errBuffer, "2:%s\n", err)
+				return -1
+			}
+			userTime, err := exec.Command("cat", "tmp/"+submit.sessionID+"/userTime.txt").Output()
+			if err != nil {
+				fmtWriter(submit.errBuffer, "3:%s\n", err)
+				return -1
+			}
+		*/
+		userStdoutReader, _, err := submit.cli.CopyFromContainer(context.TODO(), submit.sessionID, "cafecoderUsers/"+submit.sessionID+"/userStdout.txt")
 		if err != nil {
-			fmtWriter(submit.errBuffer, "1:%s\n", stderr.String())
+			fmtWriter(submit.errBuffer, "1:%s\n", err)
 			return -1
 		}
-		userStderr, err := exec.Command("cat", "../judge_server/tmp/"+submit.sessionID+"/userStderr.txt").Output()
+		userStdout := new(bytes.Buffer)
+		userStdout.ReadFrom(userStdoutReader)
+		userStderrReader, _, err := submit.cli.CopyFromContainer(context.TODO(), submit.sessionID, "cafecoderUsers/"+submit.sessionID+"/userStderr.txt")
 		if err != nil {
 			fmtWriter(submit.errBuffer, "2:%s\n", err)
 			return -1
 		}
-		userTime, err := exec.Command("cat", "../judge_server/tmp/"+submit.sessionID+"/userTime.txt").Output()
+		userStderr := new(bytes.Buffer)
+		userStdout.ReadFrom(userStderrReader)
+		userTimeReader, _, err := submit.cli.CopyFromContainer(context.TODO(), submit.sessionID, "cafecoderUsers/"+submit.sessionID+"/userTime.txt")
 		if err != nil {
 			fmtWriter(submit.errBuffer, "3:%s\n", err)
 			return -1
 		}
+		userTime := new(bytes.Buffer)
+		userTime.ReadFrom(userTimeReader)
 
 		var tmpInt64 int64
-		tmpInt64, parseerr := strconv.ParseInt(string(userTime), 10, 64)
+		tmpInt64, parseerr := strconv.ParseInt(string(userTime.String()), 10, 64)
 		submit.testcaseTime[i] = tmpInt64
 		if parseerr != nil {
-			fmtWriter(submit.errBuffer, "%s\n", string(userTime))
+			fmtWriter(submit.errBuffer, "%s\n", userTime.String())
 			fmtWriter(submit.errBuffer, "%s\n", parseerr)
 			return -1
 		}
@@ -265,12 +302,12 @@ func tryTestcase(submit *submitT) int {
 			submit.overallTime = submit.testcaseTime[i]
 		}
 
-		userStdoutLines := strings.Split(string(userStdout), "\n")
-		userStderrLines := strings.Split(string(userStderr), "\n")
+		userStdoutLines := strings.Split(userStdout.String(), "\n")
+		userStderrLines := strings.Split(userStderr.String(), "\n")
 		outputTestcaseLines := strings.Split(string(outputTestcase), "\n")
 
 		if submit.testcaseTime[i] <= 2000 {
-			if runtimeErr != nil || string(userStderr) != "" {
+			if runtimeErr != nil || userStderr.String() != "" {
 				for j := 0; j < len(userStderrLines); j++ {
 					fmtWriter(submit.errBuffer, "%s\n", userStderrLines[j])
 				}
@@ -344,8 +381,8 @@ func executeJudge(csv []string, tftpCli *tftp.Client) {
 
 	/*validation_chack*/
 	for i, _ := range args {
-		fmt.Println(args[i])
-		if checkRegexp(`[^(A-Za-z0-9)]+`, strings.TrimSpace(args[i])) == true {
+		//fmt.Println(args[i])
+		if checkRegexp(`[^(A-Za-z0-9./_)]+`, strings.TrimSpace(args[i])) == true {
 			fmtWriter(submit.resultBuffer, "%s,-1,undef,%s,0,", submit.sessionID, result[6])
 			fmtWriter(submit.errBuffer, "Inputs are included another characters[0-9],[a-z],[A-Z],'.','/','_'\n")
 			passResultTCP(submit, BACKEND_HOST_PORT)
@@ -387,7 +424,7 @@ func executeJudge(csv []string, tftpCli *tftp.Client) {
 	config := &container.Config{
 		Image: "cafecoder",
 	}
-	resp, err := submit.cli.ContainerCreate(context.TODO(), config, nil, nil, submit.sessionID)
+	resp, err := submit.cli.ContainerCreate(context.TODO(), config, nil, nil, strings.TrimSpace(submit.sessionID))
 	if err != nil {
 		fmt.Printf("2:%s\n", err)
 	}
