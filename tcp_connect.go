@@ -345,7 +345,7 @@ func executeJudge(csv []string, tftpCli *tftp.Client) {
 	/*validation_chack*/
 	for i, _ := range args {
 		fmt.Println(args[i])
-		if checkRegexp(`[^(A-Za-z0-9_\/\.=)]+`, strings.TrimSpace(args[i])) == true {
+		if checkRegexp(`[^(A-Za-z0-9)]+`, strings.TrimSpace(args[i])) == true {
 			fmtWriter(submit.resultBuffer, "%s,-1,undef,%s,0,", submit.sessionID, result[6])
 			fmtWriter(submit.errBuffer, "Inputs are included another characters[0-9],[a-z],[A-Z],'.','/','_'\n")
 			passResultTCP(submit, BACKEND_HOST_PORT)
@@ -387,7 +387,7 @@ func executeJudge(csv []string, tftpCli *tftp.Client) {
 	config := &container.Config{
 		Image: "cafecoder",
 	}
-	resp, err := submit.cli.ContainerCreate(context.TODO(), config, nil, nil, "test")
+	resp, err := submit.cli.ContainerCreate(context.TODO(), config, nil, nil, submit.sessionID)
 	if err != nil {
 		fmt.Printf("2:%s\n", err)
 	}
