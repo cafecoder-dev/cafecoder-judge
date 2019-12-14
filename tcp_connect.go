@@ -382,7 +382,7 @@ func executeJudge(csv []string, tftpCli *tftp.Client) {
 	/*validation_chack*/
 	for i, _ := range args {
 		//fmt.Println(args[i])
-		if checkRegexp(`[^(A-Za-z0-9./_)]+`, strings.TrimSpace(args[i])) == true {
+		if !checkRegexp(`[(A-Za-z0-9\./_\/)]*`, strings.TrimSpace(args[i])) {
 			fmtWriter(submit.resultBuffer, "%s,-1,undef,%s,0,", submit.sessionID, result[6])
 			fmtWriter(submit.errBuffer, "Inputs are included another characters[0-9],[a-z],[A-Z],'.','/','_'\n")
 			passResultTCP(submit, BACKEND_HOST_PORT)
@@ -393,12 +393,13 @@ func executeJudge(csv []string, tftpCli *tftp.Client) {
 	if len(args) > 1 {
 		submit.sessionID = args[1]
 	}
-	if len(args) > 7 {
+	if len(args) > 6 {
 		fmtWriter(submit.resultBuffer, "%s,-1,undef,%s,0,", submit.sessionID, result[6])
 		fmtWriter(submit.errBuffer, "too many args\n")
 		passResultTCP(submit, BACKEND_HOST_PORT)
 		return
-	} else if len(args) < 7 {
+	}
+	if len(args) < 6 {
 		fmtWriter(submit.resultBuffer, "%s,-1,undef,%s,0,", submit.sessionID, result[6])
 		fmtWriter(submit.errBuffer, "too few args\n")
 		passResultTCP(submit, BACKEND_HOST_PORT)
