@@ -38,15 +38,16 @@ type submitT struct {
 	testcaseResult [100]int
 	overallResult  int
 
-	testcaseTime [100]int64
-	overallTime  int64
-	testcaseCnt  int
-	memoryUsed   int
-	errBuffer    *bytes.Buffer
-	resultBuffer *bytes.Buffer
-	cli          *client.Client
-	ctx          context.Context
-	containerID  string
+	testcaseTime  [100]int64
+	overallTime   int64
+	testcaseCnt   int
+	memoryUsed    int
+	errBuffer     *bytes.Buffer
+	resultBuffer  *bytes.Buffer
+	cli           *client.Client
+	ctx           context.Context
+	containerID   string
+	containerConn net.Conn
 }
 
 const (
@@ -438,6 +439,13 @@ func executeJudge(csv []string, tftpCli *tftp.Client) {
 
 	defer containerStopAndRemove(submit.cli, resp.ID, submit)
 
+	//get container IP address
+	containerInspect, _ := submit.cli.ContainerInspect(context.TODO(), submit.sessionID)
+	submit.containerConn, err = net.Dial("tcp", containerInspect.NetworkSettings.IPAddress+":8888")
+	if err != nil {
+		fmt.Printf("%s\n", err)
+		return
+	}
 	//check(context.TODO(), submit.cli) //for debug
 	/*----------------------------------------------------------------------------*/
 
