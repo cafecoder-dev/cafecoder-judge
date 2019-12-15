@@ -20,12 +20,6 @@ import (
 	"pack.ag/tftp"
 )
 
-var (
-	sessionIDChan  chan string
-	resultChan     chan bool
-	errMessageChan chan string
-)
-
 const (
 	//BackendHostPort ... appear IP-address and port-number
 	BackendHostPort = "localhost:5963"
@@ -110,7 +104,7 @@ func containerStopAndRemove(submit submitT) {
 
 }
 
-func manageCommands() {
+func manageCommands(sessionIDChan *chan string, resultChan *chan bool, errMessageChan *chan string) {
 	var cmdResult cmdResultJSON
 	listen, err := net.Listen("tcp", "0.0.0.0:3344")
 	if err != nil {
@@ -125,18 +119,18 @@ func manageCommands() {
 		cnct.Close()
 		println("connection closed")
 		fmt.Println(cmdResult)
-		go func() { sessionIDChan <- cmdResult.SessionID }()
-		go func() { resultChan <- cmdResult.Result }()
-		go func() { errMessageChan <- cmdResult.ErrMessage }()
+		go func() { *(sessionIDChan) <- cmdResult.SessionID }()
+		go func() { *(resultChan) <- cmdResult.Result }()
+		go func() { *(errMessageChan) <- cmdResult.ErrMessage }()
 	}
 }
 
-func compile(submit *submitT) int {
+func compile(submit *submitT, sessionIDChan *chan string, resultChan *chan bool, errMessageChan *chan string) int {
 	var (
 		err      error
 		requests requestJSON
 	)
-	containerConn, err := net.Dial("tcp", submit.containerInspect.NetworkSettings.IPAddress+":8888")
+	containerConn, err := net.Dial("tcp", submit.containerInspect.NetworkSettings.IPAddress+":8887")
 	if err != nil {
 		fmtWriter(submit.errorBuffer, "%s\n", err)
 		return -2
@@ -176,9 +170,9 @@ func compile(submit *submitT) int {
 		}
 		containerConn.Close()
 		for {
-			if submit.sessionID == <-sessionIDChan {
-				if <-resultChan == false {
-					fmtWriter(submit.errorBuffer, "%s\n", <-errMessageChan)
+			if submit.sessionID == <-*sessionIDChan {
+				if <-*resultChan == false {
+					fmtWriter(submit.errorBuffer, "%s\n", <-*errMessageChan)
 					return -1
 				}
 				break
@@ -186,7 +180,7 @@ func compile(submit *submitT) int {
 		}
 	}
 
-	containerConn, err = net.Dial("tcp", submit.containerInspect.NetworkSettings.IPAddress+":8888")
+	containerConn, err = net.Dial("tcp", submit.containerInspect.NetworkSettings.IPAddress+":8887")
 	if err != nil {
 		fmtWriter(submit.errorBuffer, "%s\n", err)
 		return -2
@@ -196,9 +190,9 @@ func compile(submit *submitT) int {
 	containerConn.Write(b)
 	containerConn.Close()
 	for {
-		if submit.sessionID == <-sessionIDChan {
-			if <-resultChan == false {
-				fmtWriter(submit.errorBuffer, "%s\n", <-errMessageChan)
+		if submit.sessionID == <-*sessionIDChan {
+			if <-*resultChan == false {
+				fmtWriter(submit.errorBuffer, "%s\n", <-*errMessageChan)
 				return -2
 			}
 			break
@@ -208,7 +202,7 @@ func compile(submit *submitT) int {
 	return 0
 }
 
-func tryTestcase(submit *submitT) int {
+func tryTestcase(submit *submitT, sessionIDChan *chan string, resultChan *chan bool, errMessageChan *chan string) int {
 	var (
 		//stderr     bytes.Buffer
 		runtimeErr   bool
@@ -242,15 +236,13 @@ func tryTestcase(submit *submitT) int {
 		submit.containerCli.CopyToContainer(context.Background(), submit.sessionID, "/cafecoderUsers/"+submit.sessionID+"/testcase.txt", bufio.NewReader(testcaseFile), types.CopyToContainerOptions{})
 		testcaseFile.Close()
 
-		containerConn, err := net.Dial("tcp", submit.containerInspect.NetworkSettings.IPAddress+":8888")
+		containerConn, err := net.Dial("tcp", submit.containerInspect.NetworkSettings.IPAddress+":8887")
 		if err != nil {
 			fmtWriter(submit.errorBuffer, "%s\n", err)
 			return -1
 		}
 		switch submit.lang {
 		case 0: //C11
-			requests.Command = "sudo -u rbash_user timeout 3 ./cafecoderUsers/" + submit.sessionID + "/Main.out < cafecoderUsers/" + submit.sessionID + "/testcase.txt > cafecoderUsers/" + submit.sessionID + "/userStdout.txt 2> cafecoderUsers/" + submit.sessionID + "/userStderr.txt"
-		case 1: //C++17
 			requests.Command = "sudo -u rbash_user timeout 3 ./cafecoderUsers/" + submit.sessionID + "/Main.out < cafecoderUsers/" + submit.sessionID + "/testcase.txt > cafecoderUsers/" + submit.sessionID + "/userStdout.txt 2> cafecoderUsers/" + submit.sessionID + "/userStderr.txt"
 		case 2: //java8
 			requests.Command = "sudo -u rbash_user timeout 3 java -cp /cafecoderUsers/" + submit.sessionID + "/Main < cafecoderUsers/" + submit.sessionID + "/testcase.txt > cafecoderUsers/" + submit.sessionID + "/userStdout.txt 2> cafecoderUsers/" + submit.sessionID + "/userStderr.txt"
@@ -266,8 +258,8 @@ func tryTestcase(submit *submitT) int {
 		containerConn.Write(b)
 		containerConn.Close()
 		for {
-			if submit.sessionID == <-sessionIDChan {
-				runtimeErr = <-resultChan
+			if submit.sessionID == <-(*sessionIDChan) {
+				runtimeErr = <-*resultChan
 				break
 			}
 		}
@@ -335,7 +327,7 @@ func tryTestcase(submit *submitT) int {
 	return 0
 }
 
-func executeJudge(csv []string, tftpCli *tftp.Client) {
+func executeJudge(csv []string, tftpCli *tftp.Client, sessionIDChan chan string, resultChan chan bool, errMessageChan chan string) {
 	var (
 		result        = []string{"AC", "WA", "TLE", "RE", "MLE", "CE", "IE"}
 		langExtention = [...]string{".c", ".cpp", ".java", ".py", ".cs", ".rb"}
@@ -445,7 +437,7 @@ func executeJudge(csv []string, tftpCli *tftp.Client) {
 	)
 	usercodeFile.Close()
 
-	ret := compile(&submit)
+	ret := compile(&submit, &sessionIDChan, &resultChan, &errMessageChan)
 	if ret == -1 {
 		fmtWriter(submit.resultBuffer, "%s,-1,undef,%s,0,", submit.sessionID, result[6])
 		passResultTCP(submit, BackendHostPort)
@@ -456,7 +448,7 @@ func executeJudge(csv []string, tftpCli *tftp.Client) {
 		return
 	}
 
-	ret = tryTestcase(&submit)
+	ret = tryTestcase(&submit, &sessionIDChan, &resultChan, &errMessageChan)
 	if ret == -1 {
 		fmtWriter(submit.resultBuffer, "%s,-1,undef,%s,0,", submit.sessionID, result[6])
 		passResultTCP(submit, BackendHostPort)
@@ -475,8 +467,11 @@ func executeJudge(csv []string, tftpCli *tftp.Client) {
 }
 
 func main() {
-	go manageCommands()
 
+	sessionIDChan := make(chan string)
+	resultChan := make(chan bool)
+	errMessageChan := make(chan string)
+	go manageCommands(&sessionIDChan, &resultChan, &errMessageChan)
 	listen, err := net.Listen("tcp", "0.0.0.0:8888")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%s\n", err)
@@ -495,6 +490,6 @@ func main() {
 		//reader := csv.NewReader(messageLen)
 		cnct.Close()
 		println("connection closed")
-		go executeJudge(strings.Split(message, ","), tftpCli)
+		go executeJudge(strings.Split(message, ","), tftpCli, sessionIDChan, resultChan, errMessageChan)
 	}
 }
