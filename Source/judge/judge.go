@@ -124,9 +124,10 @@ func manageCommands() {
 		json.NewDecoder(cnct).Decode(&cmdResult)
 		cnct.Close()
 		println("connection closed")
-		sessionIDChan <- cmdResult.SessionID
-		resultChan <- cmdResult.Result
-		errMessageChan <- cmdResult.ErrMessage
+		fmt.Println(cmdResult)
+		go func() { sessionIDChan <- cmdResult.SessionID }()
+		go func() { resultChan <- cmdResult.Result }()
+		go func() { errMessageChan <- cmdResult.ErrMessage }()
 	}
 }
 
@@ -414,7 +415,7 @@ func executeJudge(csv []string, tftpCli *tftp.Client) {
 	}
 
 	var requests requestJSON
-	requests.Command = "mkdir cafecoderUsers/" + submit.sessionID
+	requests.Command = "mkdir -p cafecoderUsers/" + submit.sessionID
 	requests.SessionID = submit.sessionID
 	b, err := json.Marshal(requests)
 	if err != nil {

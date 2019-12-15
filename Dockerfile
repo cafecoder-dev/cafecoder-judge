@@ -1,5 +1,4 @@
 FROM ubuntu:latest
-COPY executeUsercode .
 #install compilers
 RUN \
 apt update && \
@@ -18,5 +17,7 @@ apt install apt-transport-https dirmngr -y && \
 useradd -m rbash_user && \
 mkdir cafecoderUsers && \
 chown rbash_user:rbash_user cafecoderUsers
+COPY ./executeUsercode .
+WORKDIR / 
 
 ENTRYPOINT ["./executeUsercode"]

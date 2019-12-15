@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 )
 
@@ -47,7 +48,8 @@ func executeJudge(request requestJSON) {
 	cmdResult.SessionID = request.SessionID
 	if request.Mode == "judge" {
 		start := time.Now().UnixNano()
-		err := exec.Command(request.Command).Run()
+		cmdStr := strings.Split(request.Command, " ")
+		err := exec.Command(cmdStr[0], cmdStr[1:]...).Run()
 		end := time.Now().UnixNano()
 		cmdResult.Time = (end - start) / int64(time.Millisecond)
 		if err != nil {
@@ -66,7 +68,7 @@ func executeJudge(request requestJSON) {
 		cmdResult.ErrMessage = err.Error()
 	}
 
-	conn, _ := net.Dial("tcp", "133.130.112.219:3344")
+	conn, _ := net.Dial("tcp", "172.17.0.1:3344")
 	b, _ := json.Marshal(cmdResult)
 	conn.Write(b)
 	conn.Close()
