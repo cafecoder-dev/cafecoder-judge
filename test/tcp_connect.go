@@ -102,8 +102,7 @@ func compile(submit *submitT) int {
 		mkdirCmd.Stderr = &stderr
 		err := mkdirCmd.Run()
 	*/
-	idRes, err = submit.cli.ContainerExecCreate(context.TODO(), submit.containerID, types.ExecConfig{AttachStdout: true, Cmd: []string{"mkdir", "cafecoderUsers/" + submit.sessionID}})
-	res, err = submit.cli.ContainerExecAttach(context.TODO(), idRes.ID, types.ExecStartCheck{})
+	submit.containerConn.Write([]byte("{\"sessionID\":" + submit.sessionID + ",\"command\":mkdir cafecoderUsers/" + submit.sessionID + "}"))
 	if err != nil {
 		fmtWriter(submit.errBuffer, "couldn't execute next command \"mkdir cafecoderUsers/****\"\n")
 		fmtWriter(submit.errBuffer, "%s\n", stderr.String())
