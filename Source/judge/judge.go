@@ -407,7 +407,7 @@ func executeJudge(csv []string, tftpCli *tftp.Client) {
 	submit.containerInspect, _ = submit.containerCli.ContainerInspect(context.TODO(), submit.containerID)
 	/*----------------------------------------------------------------------------*/
 
-	containerConn, err := net.Dial("tcp", submit.containerInspect.NetworkSettings.IPAddress+":8888")
+	containerConn, err := net.Dial("tcp", submit.containerInspect.NetworkSettings.IPAddress+":8887")
 	if err != nil {
 		fmtWriter(submit.errorBuffer, "%s\n", err)
 		passResultTCP(submit, BackendHostPort)
@@ -415,7 +415,7 @@ func executeJudge(csv []string, tftpCli *tftp.Client) {
 	}
 
 	var requests requestJSON
-	requests.Command = "mkdir -p cafecoderUsers/" + submit.sessionID
+	requests.Command = "timeout 3 mkdir -p cafecoderUsers/" + submit.sessionID
 	requests.SessionID = submit.sessionID
 	b, err := json.Marshal(requests)
 	if err != nil {

@@ -26,7 +26,7 @@ type requestJSON struct {
 }
 
 func main() {
-	listen, err := net.Listen("tcp", "0.0.0.0:8888") //from backend server
+	listen, err := net.Listen("tcp", "0.0.0.0:8887") //from backend server
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%s\n", err)
 	}
@@ -49,27 +49,32 @@ func executeJudge(request requestJSON) {
 	if request.Mode == "judge" {
 		start := time.Now().UnixNano()
 		cmdStr := strings.Split(request.Command, " ")
-		err := exec.Command(cmdStr[0], cmdStr[1:]...).Run()
+		_, err := exec.Command(cmdStr[0], cmdStr[1:]...).CombinedOutput()
 		end := time.Now().UnixNano()
 		cmdResult.Time = (end - start) / int64(time.Millisecond)
 		if err != nil {
 			cmdResult.Result = false
+			cmdResult.ErrMessage = err.Error()
 		} else {
 			cmdResult.Result = true
+			cmdResult.ErrMessage = ""
 		}
-		cmdResult.ErrMessage = err.Error()
 	} else {
-		err := exec.Command(request.Command).Run()
+		cmdStr := strings.Split(request.Command, " ")
+		_, err := exec.Command(cmdStr[0], cmdStr[1:]...).CombinedOutput()
 		if err != nil {
 			cmdResult.Result = false
+			cmdResult.ErrMessage = err.Error()
 		} else {
 			cmdResult.Result = true
+			cmdResult.ErrMessage = ""
 		}
-		cmdResult.ErrMessage = err.Error()
 	}
-
-	conn, _ := net.Dial("tcp", "172.17.0.1:3344")
-	b, _ := json.Marshal(cmdResult)
+	conn, err := net.Dial("tcp", "172.17.0.1:3344")
+	b, err := json.Marshal(cmdResult)
+	if err != nil {
+		conn.Write([]byte("err marshal"))
+	}
 	conn.Write(b)
 	conn.Close()
 }
