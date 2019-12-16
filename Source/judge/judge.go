@@ -41,6 +41,18 @@ type cmdResultJSON struct {
 	ErrMessage string `json:"errMessage"`
 }
 
+type overAllResultJSON struct {
+	SessionID          string      `json:"sessionID"`
+	OverAllTime        int64       `json:"over_all_time"`
+	OverAllResult      string      `json:"over_all_result"`
+	OverAllScore       int         `json:"over_all_score"`
+	TestcaseN          int         `json:"testcase_n"`
+	TestcaseName       [100]string `json:"testcase_name"`
+	TestcaseResult     [100]string `json:"testcase_result"`
+	TestcaseMemoryUsed [100]int64  `json:"testcase_memory_used"`
+	TestcaseTime       [100]int64  `json:"testcase_time"`
+}
+
 type submitT struct {
 	sessionID       string //csv[1]
 	usercodePath    string
@@ -48,11 +60,13 @@ type submitT struct {
 	testcaseDirPath string
 	score           int
 
-	execDirPath    string
-	execFilePath   string
-	testcaseN      int
-	testcaseTime   [100]int64
-	testcaseResult [100]int
+	execDirPath        string
+	execFilePath       string
+	testcaseN          int
+	testcaseName       [100]string
+	testcaseTime       [100]int64
+	testcaseResult     [100]int
+	testcaseMemoryUsed [100]int64
 
 	overallTime   int64
 	overallResult int
@@ -343,6 +357,25 @@ func tryTestcase(submit *submitT, sessionIDChan *chan cmdResultJSON) int {
 	return 0
 }
 
+func serveResult(overAllResult *overAllResultJSON, submit submitT, errorMessage string) {
+	var result = []string{"AC", "WA", "TLE", "RE", "MLE", "CE", "IE"}
+	overAllResult.SessionID = submit.sessionID
+	overAllResult.OverAllResult = result[submit.overallResult]
+	overAllResult.OverAllTime = submit.overallTime
+	overAllResult.TestcaseN = submit.testcaseN
+	overAllResult.OverAllScore = submit.score
+	for i := 0; i < submit.testcaseN; i++ {
+		overAllResult.TestcaseName[i] = submit.testcaseName[i]
+		overAllResult.TestcaseResult[i] = result[submit.testcaseResult[i]]
+		overAllResult.TestcaseTime[i] = submit.testcaseTime[i]
+		overAllResult.TestcaseMemoryUsed[i] = submit.testcaseMemoryUsed[i]
+	}
+	b, _ := json.Marshal(*overAllResult)
+	fmtWriter(submit.resultBuffer, "%s", string(b))
+	fmtWriter(submit.errorBuffer, "%s", errorMessage)
+	passResultTCP(submit, BackendHostPort)
+}
+
 func fileCopy(dstName string, srcName string) {
 	src, err := os.Open(srcName)
 	if err != nil {
@@ -361,38 +394,56 @@ func fileCopy(dstName string, srcName string) {
 		panic(err)
 	}
 }
+
+func initSubmit(submit *submitT) {
+	submit.overallTime = -1
+}
+
 func executeJudge(csv []string, tftpCli *tftp.Client, sessionIDChan chan cmdResultJSON) {
 	var (
-		result        = []string{"AC", "WA", "TLE", "RE", "MLE", "CE", "IE"}
+		//result        = []string{"AC", "WA", "TLE", "RE", "MLE", "CE", "IE"}
 		langExtention = [...]string{".c", ".cpp", ".java", ".py", ".cs", ".rb"}
 		submit        = submitT{errorBuffer: new(bytes.Buffer), resultBuffer: new(bytes.Buffer)}
 		err           error
+		overAllResult overAllResultJSON
 	)
-
-	/*validation checks*/
-	for i := range csv {
-		if !checkRegexp(`[(A-Za-z0-9\./_\/)]*`, strings.TrimSpace(csv[i])) {
-			fmtWriter(submit.resultBuffer, "%s,-1,undef,%s,0,", submit.sessionID, result[6])
-			fmtWriter(submit.errorBuffer, "Inputs are included another characters[0-9],[a-z],[A-Z],'.','/','_'\n")
-			passResultTCP(submit, BackendHostPort)
-			return
-		}
-	}
+	initSubmit(&submit)
 
 	if len(csv) > 1 {
 		submit.sessionID = csv[1]
 	}
 	if len(csv) > 6 {
-		fmtWriter(submit.resultBuffer, "%s,-1,undef,%s,0,", submit.sessionID, result[6])
-		fmtWriter(submit.errorBuffer, "too many args\n")
-		passResultTCP(submit, BackendHostPort)
+		/*
+			fmtWriter(submit.resultBuffer, "%s,-1,undef,%s,0,", submit.sessionID, result[6])
+			fmtWriter(submit.errorBuffer, "too many args\n")
+			passResultTCP(submit, BackendHostPort)
+		*/
+		submit.overallResult = 6
+		serveResult(&overAllResult, submit, "too many args")
 		return
 	}
 	if len(csv) < 6 {
-		fmtWriter(submit.resultBuffer, "%s,-1,undef,%s,0,", submit.sessionID, result[6])
-		fmtWriter(submit.errorBuffer, "too few args\n")
-		passResultTCP(submit, BackendHostPort)
+		/*
+				fmtWriter(submit.resultBuffer, "%s,-1,undef,%s,0,", submit.sessionID, result[6])
+				fmtWriter(submit.errorBuffer, "too few args\n")
+
+			passResultTCP(submit, BackendHostPort)
+		*/
+		submit.overallResult = 6
+		serveResult(&overAllResult, submit, "too few args")
 		return
+	}
+
+	/*validation checks*/
+	for i := range csv {
+		if !checkRegexp(`[(A-Za-z0-9\./_\/)]*`, strings.TrimSpace(csv[i])) {
+			//fmtWriter(submit.resultBuffer, "%s,-1,undef,%s,0,", submit.sessionID, result[6])
+			//fmtWriter(submit.errorBuffer, "Inputs are included another characters[0-9],[a-z],[A-Z],'.','/','_'\n")
+			//passResultTCP(submit, BackendHostPort)
+			submit.overallResult = 6
+			serveResult(&overAllResult, submit, "Inputs are included another characters[0-9],[a-z],[A-Z],'.','/','_'")
+			return
+		}
 	}
 
 	submit.usercodePath = csv[2]
@@ -410,8 +461,10 @@ func executeJudge(csv []string, tftpCli *tftp.Client, sessionIDChan chan cmdResu
 	/*--------------------------------about docker--------------------------------*/
 	submit.containerCli, err = client.NewClientWithOpts(client.WithVersion("1.35"))
 	if err != nil {
-		fmtWriter(submit.errorBuffer, "%s\n", err)
-		passResultTCP(submit, BackendHostPort)
+		//fmtWriter(submit.errorBuffer, "%s\n", err)
+		//passResultTCP(submit, BackendHostPort)
+		submit.overallResult = 6
+		serveResult(&overAllResult, submit, err.Error())
 		return
 	}
 	config := &container.Config{
@@ -420,15 +473,19 @@ func executeJudge(csv []string, tftpCli *tftp.Client, sessionIDChan chan cmdResu
 	}
 	resp, err := submit.containerCli.ContainerCreate(context.TODO(), config, nil, nil, strings.TrimSpace(submit.sessionID))
 	if err != nil {
-		fmtWriter(submit.errorBuffer, "2:%s\n", err)
-		passResultTCP(submit, BackendHostPort)
+		//fmtWriter(submit.errorBuffer, "2:%s\n", err)
+		//passResultTCP(submit, BackendHostPort)
+		submit.overallResult = 6
+		serveResult(&overAllResult, submit, err.Error())
 		return
 	}
 	submit.containerID = resp.ID
 	err = submit.containerCli.ContainerStart(context.TODO(), submit.containerID, types.ContainerStartOptions{})
 	if err != nil {
-		fmtWriter(submit.errorBuffer, "3:%s\n", err)
-		passResultTCP(submit, BackendHostPort)
+		//fmtWriter(submit.errorBuffer, "3:%s\n", err)
+		//passResultTCP(submit, BackendHostPort)
+		submit.overallResult = 6
+		serveResult(&overAllResult, submit, err.Error())
 		return
 	}
 
@@ -440,8 +497,10 @@ func executeJudge(csv []string, tftpCli *tftp.Client, sessionIDChan chan cmdResu
 
 	containerConn, err := net.Dial("tcp", submit.containerInspect.NetworkSettings.IPAddress+":8887")
 	if err != nil {
-		fmtWriter(submit.errorBuffer, "%s\n", err)
-		passResultTCP(submit, BackendHostPort)
+		//fmtWriter(submit.errorBuffer, "%s\n", err)
+		//passResultTCP(submit, BackendHostPort)
+		submit.overallResult = 6
+		serveResult(&overAllResult, submit, err.Error())
 		return
 	}
 
@@ -450,8 +509,10 @@ func executeJudge(csv []string, tftpCli *tftp.Client, sessionIDChan chan cmdResu
 	requests.SessionID = submit.sessionID
 	b, err := json.Marshal(requests)
 	if err != nil {
-		fmtWriter(submit.errorBuffer, "%s\n", err)
-		passResultTCP(submit, BackendHostPort)
+		//fmtWriter(submit.errorBuffer, "%s\n", err)
+		//passResultTCP(submit, BackendHostPort)
+		submit.overallResult = 6
+		serveResult(&overAllResult, submit, err.Error())
 		return
 	}
 	println(string(b))
@@ -486,31 +547,40 @@ func executeJudge(csv []string, tftpCli *tftp.Client, sessionIDChan chan cmdResu
 	//
 	ret := compile(&submit, &sessionIDChan)
 	if ret == -1 {
-		fmtWriter(submit.resultBuffer, "%s,-1,undef,%s,0,", submit.sessionID, result[6])
-		passResultTCP(submit, BackendHostPort)
+		//fmtWriter(submit.resultBuffer, "%s,-1,undef,%s,0,", submit.sessionID, result[6])
+		//passResultTCP(submit, BackendHostPort)
+		submit.overallResult = 6
+		serveResult(&overAllResult, submit, "")
 		return
 	} else if ret == -2 {
-		fmtWriter(submit.resultBuffer, "%s,-1,undef,%s,0,", submit.sessionID, result[5])
-		passResultTCP(submit, BackendHostPort)
+		//fmtWriter(submit.resultBuffer, "%s,-1,undef,%s,0,", submit.sessionID, result[5])
+		//passResultTCP(submit, BackendHostPort)
+		submit.overallResult = 5
+		serveResult(&overAllResult, submit, "")
 		return
 	}
 
 	ret = tryTestcase(&submit, &sessionIDChan)
 	if ret == -1 {
-		fmtWriter(submit.resultBuffer, "%s,-1,undef,%s,0,", submit.sessionID, result[6])
-		passResultTCP(submit, BackendHostPort)
+		//fmtWriter(submit.resultBuffer, "%s,-1,undef,%s,0,", submit.sessionID, result[6])
+		//passResultTCP(submit, BackendHostPort)
+		submit.overallResult = 6
+		serveResult(&overAllResult, submit, "")
 		return
 	}
-	fmtWriter(submit.resultBuffer, "%s,%d,undef,%s,", submit.sessionID, submit.overallTime, result[submit.overallResult])
-	if submit.overallResult == 0 {
-		fmtWriter(submit.resultBuffer, "%d,", submit.score)
-	} else {
-		fmtWriter(submit.resultBuffer, "0,")
-	}
-	for i := 0; i < submit.testcaseN; i++ {
-		fmtWriter(submit.resultBuffer, "%s,%d,", result[submit.testcaseResult[i]], submit.testcaseTime[i])
-	}
-	passResultTCP(submit, BackendHostPort)
+	//fmtWriter(submit.resultBuffer, "%s,%d,undef,%s,", submit.sessionID, submit.overallTime, result[submit.overallResult])
+	/*
+		if submit.overallResult == 0 {
+			fmtWriter(submit.resultBuffer, "%d,", submit.score)
+		} else {
+			fmtWriter(submit.resultBuffer, "0,")
+		}
+		for i := 0; i < submit.testcaseN; i++ {
+			fmtWriter(submit.resultBuffer, "%s,%d,", result[submit.testcaseResult[i]], submit.testcaseTime[i])
+		}
+		passResultTCP(submit, BackendHostPort)
+	*/
+	serveResult(&overAllResult, submit, err.Error())
 	return
 }
 
