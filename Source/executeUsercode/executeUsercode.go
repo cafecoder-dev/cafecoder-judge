@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+    "io"
 	"fmt"
 	"net"
 	"os"
@@ -49,12 +50,24 @@ func executeJudge(request requestJSON) {
 	if request.Mode == "judge" {
 		start := time.Now().UnixNano()
 		cmdStr := strings.Split(request.Command, " ")
-		_, err := exec.Command(cmdStr[0], cmdStr[1:]...).CombinedOutput()
+        cmd :=  exec.Command(cmdStr[0], cmdStr[1:]...)
+        pipe , _ := cmd.StdinPipe() 
+        t , _ :=os.Open("cafecoderUsers/" + cmdResult.SessionID + "/testcase.txt")
+        defer t.Close()
+        defer pipe.Close()
+        io.Copy(pipe,t)
+		out, err := cmd.CombinedOutput()
+        o , _ := os.Create("cafecoderUsers/"+cmdResult.SessionID+"/userStdout.txt") 
+        defer o.Close()
+        o.WriteString(string(fmt.Sprintf("%s",out)))
+        e , _ := os.Create("cafecoderUsers/"+cmdResult.SessionID+"/userStderr.txt") 
+        defer e.Close()
+        e.WriteString(string( (fmt.Sprintf("%s",err) )))
 		end := time.Now().UnixNano()
 		cmdResult.Time = (end - start) / int64(time.Millisecond)
 		if err != nil {
-			cmdResult.Result = false
-			cmdResult.ErrMessage = err.Error()
+			cmdResult.Result = true
+			cmdResult.ErrMessage = string( fmt.Sprintf("%s",err)  )
 		} else {
 			cmdResult.Result = true
 			cmdResult.ErrMessage = ""
@@ -63,8 +76,8 @@ func executeJudge(request requestJSON) {
 		cmdStr := strings.Split(request.Command, " ")
 		_, err := exec.Command(cmdStr[0], cmdStr[1:]...).CombinedOutput()
 		if err != nil {
-			cmdResult.Result = false
-			cmdResult.ErrMessage = err.Error()
+			cmdResult.Result = true
+			cmdResult.ErrMessage = string( fmt.Sprintf("%s",err)  )
 		} else {
 			cmdResult.Result = true
 			cmdResult.ErrMessage = ""
