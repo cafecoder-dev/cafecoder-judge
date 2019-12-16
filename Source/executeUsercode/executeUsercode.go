@@ -66,7 +66,7 @@ func executeJudge(request requestJSON) {
 		end := time.Now().UnixNano()
 		cmdResult.Time = (end - start) / int64(time.Millisecond)
 		if err != nil {
-			cmdResult.Result = true
+			cmdResult.Result = false
 			cmdResult.ErrMessage = string( fmt.Sprintf("%s",err)  )
 		} else {
 			cmdResult.Result = true
@@ -76,7 +76,7 @@ func executeJudge(request requestJSON) {
 		cmdStr := strings.Split(request.Command, " ")
 		_, err := exec.Command(cmdStr[0], cmdStr[1:]...).CombinedOutput()
 		if err != nil {
-			cmdResult.Result = true
+			cmdResult.Result = false 
 			cmdResult.ErrMessage = string( fmt.Sprintf("%s",err)  )
 		} else {
 			cmdResult.Result = true

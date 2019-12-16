@@ -108,7 +108,7 @@ func containerStopAndRemove(submit submitT) {
 
 }
 
-func manageCommands(sessionIDChan *chan string, resultChan *chan int64, errMessageChan *chan string) {
+func manageCommands(sessionIDChan *chan cmdResultJSON) {
 	var cmdResult cmdResultJSON
 	listen, err := net.Listen("tcp", "0.0.0.0:3344")
 	if err != nil {
@@ -123,13 +123,11 @@ func manageCommands(sessionIDChan *chan string, resultChan *chan int64, errMessa
 		cnct.Close()
 		println("connection closed")
 		fmt.Println(cmdResult)
-		go func() { *(sessionIDChan) <- cmdResult.SessionID }()
-		go func() { *(resultChan) <- cmdResult.Time }()
-		go func() { *(errMessageChan) <- cmdResult.ErrMessage }()
-	}
+		go func() { *(sessionIDChan) <- cmdResult}()
+    }
 }
 
-func compile(submit *submitT, sessionIDChan *chan string, resultChan *chan int64, errMessageChan *chan string) int {
+func compile(submit *submitT, sessionIDChan *chan cmdResultJSON) int {
 	var (
 		err      error
 		requests requestJSON
@@ -176,8 +174,13 @@ func compile(submit *submitT, sessionIDChan *chan string, resultChan *chan int64
 		containerConn.Close()
         fmt.Println("wait for compile...")
 		for {
-			if submit.sessionID == <-*sessionIDChan {
-                fmtWriter(submit.errorBuffer, "%s\n", <-*errMessageChan)
+            recv := <-*sessionIDChan
+			if submit.sessionID == recv.SessionID {
+                fmtWriter(submit.errorBuffer, "%s\n", recv.ErrMessage)
+                if !recv.Result {
+                    //CE
+                    return -2
+                }
 				break
 			}
 		}
@@ -195,8 +198,9 @@ func compile(submit *submitT, sessionIDChan *chan string, resultChan *chan int64
 	containerConn.Write(b)
 	containerConn.Close()
 	for {
-		if submit.sessionID == <-*sessionIDChan {
-            fmtWriter(submit.errorBuffer, "%s\n", <-*errMessageChan)
+        recv := <-*sessionIDChan
+		if submit.sessionID == recv.SessionID {
+            fmtWriter(submit.errorBuffer, "%s\n", recv.ErrMessage)
 			break
 		}
 	}
@@ -204,7 +208,7 @@ func compile(submit *submitT, sessionIDChan *chan string, resultChan *chan int64
 	return 0
 }
 
-func tryTestcase(submit *submitT, sessionIDChan *chan string, resultChan *chan int64, errMessageChan *chan string) int {
+func tryTestcase(submit *submitT,sessionIDChan *chan cmdResultJSON) int {
 	var (
 		//stderr     bytes.Buffer
 		requests     requestJSON
@@ -258,8 +262,10 @@ func tryTestcase(submit *submitT, sessionIDChan *chan string, resultChan *chan i
 		containerConn.Write(b)
 		containerConn.Close()
         fmt.Println("wait for testcase...")
+        var recv cmdResultJSON 
 		for {
-			if submit.sessionID == <-(*sessionIDChan) {
+            recv = <-*sessionIDChan 
+			if submit.sessionID == recv.SessionID {
 				break
 			}
 		}
@@ -281,7 +287,7 @@ func tryTestcase(submit *submitT, sessionIDChan *chan string, resultChan *chan i
 		userStdout.ReadFrom(userStderrReader)
 
         fmt.Println("time")
-		submit.testcaseTime[i] = <-*resultChan
+		submit.testcaseTime[i] = recv.Time
         fmt.Println(submit.testcaseTime[i])
 		if submit.overallTime < submit.testcaseTime[i] {
 			submit.overallTime = submit.testcaseTime[i]
@@ -292,7 +298,7 @@ func tryTestcase(submit *submitT, sessionIDChan *chan string, resultChan *chan i
 		outputTestcaseLines := strings.Split(string(outputTestcase), "\n")
 
 		if submit.testcaseTime[i] <= 2000 {
-			if userStderr.String() != "" {
+			if userStderr.String() != "" && !recv.Result {
 				for j := 0; j < len(userStderrLines); j++ {
 					fmtWriter(submit.errorBuffer, "%s\n", userStderrLines[j])
 				}
@@ -335,7 +341,7 @@ func fileCopy(dstName string, srcName string) {
         panic(err)
     }
 }
-func executeJudge(csv []string, tftpCli *tftp.Client, sessionIDChan chan string, resultChan chan int64, errMessageChan chan string) {
+func executeJudge(csv []string, tftpCli *tftp.Client, sessionIDChan chan cmdResultJSON) {
 	var (
 		result        = []string{"AC", "WA", "TLE", "RE", "MLE", "CE", "IE"}
 		langExtention = [...]string{".c", ".cpp", ".java", ".py", ".cs", ".rb"}
@@ -432,8 +438,9 @@ func executeJudge(csv []string, tftpCli *tftp.Client, sessionIDChan chan string,
 	containerConn.Write(b)
 	containerConn.Close()
 	for {
-		if submit.sessionID == <-sessionIDChan {
-            fmtWriter(submit.errorBuffer, "%s\n", <-errMessageChan)
+        recv := <-sessionIDChan 
+		if submit.sessionID == recv.SessionID {
+            fmtWriter(submit.errorBuffer, "%s\n", recv.ErrMessage)
             break
 		}
 	}
@@ -447,7 +454,7 @@ func executeJudge(csv []string, tftpCli *tftp.Client, sessionIDChan chan string,
 	)
 	usercodeFile.Close()
 
-	ret := compile(&submit, &sessionIDChan, &resultChan, &errMessageChan)
+	ret := compile(&submit, &sessionIDChan)
 	if ret == -1 {
 		fmtWriter(submit.resultBuffer, "%s,-1,undef,%s,0,", submit.sessionID, result[6])
 		passResultTCP(submit, BackendHostPort)
@@ -458,7 +465,7 @@ func executeJudge(csv []string, tftpCli *tftp.Client, sessionIDChan chan string,
 		return
 	}
 
-	ret = tryTestcase(&submit, &sessionIDChan, &resultChan, &errMessageChan)
+	ret = tryTestcase(&submit, &sessionIDChan)
 	if ret == -1 {
 		fmtWriter(submit.resultBuffer, "%s,-1,undef,%s,0,", submit.sessionID, result[6])
 		passResultTCP(submit, BackendHostPort)
@@ -478,10 +485,8 @@ func executeJudge(csv []string, tftpCli *tftp.Client, sessionIDChan chan string,
 
 func main() {
 
-	sessionIDChan := make(chan string)
-	resultChan := make(chan int64)
-	errMessageChan := make(chan string)
-	go manageCommands(&sessionIDChan, &resultChan, &errMessageChan)
+	sessionIDChan := make(chan cmdResultJSON)
+	go manageCommands(&sessionIDChan)
 	listen, err := net.Listen("tcp", "0.0.0.0:8888")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%s\n", err)
@@ -500,6 +505,6 @@ func main() {
 		//reader := csv.NewReader(messageLen)
 		cnct.Close()
 		println("connection closed")
-		go executeJudge(strings.Split(message, ","), tftpCli, sessionIDChan, resultChan, errMessageChan)
+		go executeJudge(strings.Split(message, ","), tftpCli, sessionIDChan)
 	}
 }
