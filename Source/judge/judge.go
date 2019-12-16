@@ -71,7 +71,6 @@ func checkRegexp(reg, str string) bool {
 
 func fmtWriter(buf *bytes.Buffer, format string, values ...interface{}) {
 	arg := fmt.Sprintf(format, values...)
-	fmt.Printf(format, values...)
 	(*buf).WriteString(arg)
 }
 
@@ -81,7 +80,7 @@ func passResultTCP(submit submitT, hostAndPort string) {
 		fmt.Println(err)
 		return
 	}
-	passStr := strings.Trim(submit.resultBuffer.String(), "\n") + "\n"
+	passStr := strings.Trim(submit.resultBuffer.String(), "\n")
 	errStr := strings.Trim("error,"+submit.sessionID+","+submit.errorBuffer.String(), "\n") + "\n"
 	fmt.Println(passStr)
 	fmt.Println(errStr)
