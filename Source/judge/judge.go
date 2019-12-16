@@ -1,14 +1,15 @@
 package main
 
 import (
+	"archive/tar"
 	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net"
-    "io"
 	"os"
 	"regexp"
 	"strconv"
@@ -80,11 +81,11 @@ func passResultTCP(submit submitT, hostAndPort string) {
 		fmt.Println(err)
 		return
 	}
-    passStr := strings.Trim(submit.resultBuffer.String(),"\n")+"\n"
-    errStr := strings.Trim("error," + submit.sessionID + "," + submit.errorBuffer.String(),"\n")+"\n"
+	passStr := strings.Trim(submit.resultBuffer.String(), "\n") + "\n"
+	errStr := strings.Trim("error,"+submit.sessionID+","+submit.errorBuffer.String(), "\n") + "\n"
 	fmt.Println(passStr)
 	fmt.Println(errStr)
-	conn.Write([]byte(passStr+errStr))
+	conn.Write([]byte(passStr + errStr))
 	conn.Close()
 }
 
@@ -123,8 +124,8 @@ func manageCommands(sessionIDChan *chan cmdResultJSON) {
 		cnct.Close()
 		println("connection closed")
 		fmt.Println(cmdResult)
-		go func() { *(sessionIDChan) <- cmdResult}()
-    }
+		go func() { *(sessionIDChan) <- cmdResult }()
+	}
 }
 
 func compile(submit *submitT, sessionIDChan *chan cmdResultJSON) int {
@@ -164,7 +165,7 @@ func compile(submit *submitT, sessionIDChan *chan cmdResultJSON) int {
 	//I couldn't solve a problem in syntax-chack python3 code.
 	//Please teach me how to solve this problem:(
 	if submit.lang != 3 && submit.lang != 5 {
-    fmt.Println("go compile")
+		fmt.Println("go compile")
 		b, _ := json.Marshal(requests)
 		containerConn.Write(b)
 		if err != nil {
@@ -172,23 +173,23 @@ func compile(submit *submitT, sessionIDChan *chan cmdResultJSON) int {
 			return -2
 		}
 		containerConn.Close()
-        fmt.Println("wait for compile...")
+		fmt.Println("wait for compile...")
 		for {
-            recv := <-*sessionIDChan
+			recv := <-*sessionIDChan
 			if submit.sessionID == recv.SessionID {
-                fmtWriter(submit.errorBuffer, "%s\n", recv.ErrMessage)
-                if !recv.Result {
-                    //CE
-                    return -2
-                }
+				fmtWriter(submit.errorBuffer, "%s\n", recv.ErrMessage)
+				if !recv.Result {
+					//CE
+					return -2
+				}
 				break
 			}
 		}
-    fmt.Println("compile done")
+		fmt.Println("compile done")
 	}
 
 	containerConn, err = net.Dial("tcp", submit.containerInspect.NetworkSettings.IPAddress+":8887")
-    defer containerConn.Close()
+	defer containerConn.Close()
 	if err != nil {
 		fmtWriter(submit.errorBuffer, "%s\n", err)
 		return -2
@@ -198,9 +199,9 @@ func compile(submit *submitT, sessionIDChan *chan cmdResultJSON) int {
 	containerConn.Write(b)
 	containerConn.Close()
 	for {
-        recv := <-*sessionIDChan
+		recv := <-*sessionIDChan
 		if submit.sessionID == recv.SessionID {
-            fmtWriter(submit.errorBuffer, "%s\n", recv.ErrMessage)
+			fmtWriter(submit.errorBuffer, "%s\n", recv.ErrMessage)
 			break
 		}
 	}
@@ -208,7 +209,7 @@ func compile(submit *submitT, sessionIDChan *chan cmdResultJSON) int {
 	return 0
 }
 
-func tryTestcase(submit *submitT,sessionIDChan *chan cmdResultJSON) int {
+func tryTestcase(submit *submitT, sessionIDChan *chan cmdResultJSON) int {
 	var (
 		//stderr     bytes.Buffer
 		requests     requestJSON
@@ -236,8 +237,25 @@ func tryTestcase(submit *submitT,sessionIDChan *chan cmdResultJSON) int {
 			fmtWriter(submit.errorBuffer, "%s\n", err)
 			return -1
 		}
+
+		//tar copy
 		testcaseFile, _ := os.Open(submit.testcaseDirPath + "/in/" + testcaseName[i])
-		submit.containerCli.CopyToContainer(context.Background(), submit.sessionID, "/cafecoderUsers/"+submit.sessionID+"/testcase.txt", bufio.NewReader(testcaseFile), types.CopyToContainerOptions{})
+		content, err := ioutil.ReadAll(testcaseFile)
+		var buf bytes.Buffer
+		tw := tar.NewWriter(&buf)
+		_ = tw.WriteHeader(&tar.Header{
+			Name: "/cafecoderUsers/" + submit.sessionID + "/testcase.txt", // filename
+			Mode: 0744,                                                    // permissions
+			Size: int64(len(content)),                                     // filesize
+		})
+		tw.Write(content)
+		tw.Close()
+		submit.containerCli.CopyToContainer(
+			context.TODO(),
+			submit.containerID,
+			"/",
+			&buf, types.CopyToContainerOptions{},
+		)
 		testcaseFile.Close()
 
 		containerConn, err := net.Dial("tcp", submit.containerInspect.NetworkSettings.IPAddress+":8887")
@@ -261,10 +279,10 @@ func tryTestcase(submit *submitT,sessionIDChan *chan cmdResultJSON) int {
 		b, _ := json.Marshal(requests)
 		containerConn.Write(b)
 		containerConn.Close()
-        fmt.Println("wait for testcase...")
-        var recv cmdResultJSON 
+		fmt.Println("wait for testcase...")
+		var recv cmdResultJSON
 		for {
-            recv = <-*sessionIDChan 
+			recv = <-*sessionIDChan
 			if submit.sessionID == recv.SessionID {
 				break
 			}
@@ -275,20 +293,23 @@ func tryTestcase(submit *submitT,sessionIDChan *chan cmdResultJSON) int {
 			fmtWriter(submit.errorBuffer, "1:%s\n", err)
 			return -1
 		}
+		tr := tar.NewReader(userStdoutReader)
+		tr.Next()
 		userStdout := new(bytes.Buffer)
-		userStdout.ReadFrom(userStdoutReader)
+		userStdout.ReadFrom(tr)
 
 		userStderrReader, _, err := submit.containerCli.CopyFromContainer(context.TODO(), submit.sessionID, "cafecoderUsers/"+submit.sessionID+"/userStderr.txt")
 		if err != nil {
 			fmtWriter(submit.errorBuffer, "2:%s\n", err)
 			return -1
 		}
+		tr = tar.NewReader(userStderrReader)
+		tr.Next()
 		userStderr := new(bytes.Buffer)
-		userStdout.ReadFrom(userStderrReader)
-
-        fmt.Println("time")
+		userStderr.ReadFrom(tr)
+		fmt.Println("time")
 		submit.testcaseTime[i] = recv.Time
-        fmt.Println(submit.testcaseTime[i])
+		fmt.Println(submit.testcaseTime[i])
 		if submit.overallTime < submit.testcaseTime[i] {
 			submit.overallTime = submit.testcaseTime[i]
 		}
@@ -324,22 +345,22 @@ func tryTestcase(submit *submitT,sessionIDChan *chan cmdResultJSON) int {
 }
 
 func fileCopy(dstName string, srcName string) {
-    src, err := os.Open(srcName)
-    if err != nil {
-        panic(err)
-    }
-    defer src.Close()
+	src, err := os.Open(srcName)
+	if err != nil {
+		panic(err)
+	}
+	defer src.Close()
 
-    dst, err := os.Create(dstName)
-    if err != nil {
-        panic(err)
-    }
-    defer dst.Close()
+	dst, err := os.Create(dstName)
+	if err != nil {
+		panic(err)
+	}
+	defer dst.Close()
 
-    _, err = io.Copy(dst, src)
-    if  err != nil {
-        panic(err)
-    }
+	_, err = io.Copy(dst, src)
+	if err != nil {
+		panic(err)
+	}
 }
 func executeJudge(csv []string, tftpCli *tftp.Client, sessionIDChan chan cmdResultJSON) {
 	var (
@@ -392,7 +413,7 @@ func executeJudge(csv []string, tftpCli *tftp.Client, sessionIDChan chan cmdResu
 	if err != nil {
 		fmtWriter(submit.errorBuffer, "%s\n", err)
 		passResultTCP(submit, BackendHostPort)
-        return
+		return
 	}
 	config := &container.Config{
 
@@ -402,14 +423,14 @@ func executeJudge(csv []string, tftpCli *tftp.Client, sessionIDChan chan cmdResu
 	if err != nil {
 		fmtWriter(submit.errorBuffer, "2:%s\n", err)
 		passResultTCP(submit, BackendHostPort)
-        return
+		return
 	}
 	submit.containerID = resp.ID
 	err = submit.containerCli.ContainerStart(context.TODO(), submit.containerID, types.ContainerStartOptions{})
 	if err != nil {
 		fmtWriter(submit.errorBuffer, "3:%s\n", err)
 		passResultTCP(submit, BackendHostPort)
-        return
+		return
 	}
 
 	defer containerStopAndRemove(submit)
@@ -432,28 +453,38 @@ func executeJudge(csv []string, tftpCli *tftp.Client, sessionIDChan chan cmdResu
 	if err != nil {
 		fmtWriter(submit.errorBuffer, "%s\n", err)
 		passResultTCP(submit, BackendHostPort)
-        return
+		return
 	}
 	println(string(b))
 	containerConn.Write(b)
 	containerConn.Close()
 	for {
-        recv := <-sessionIDChan 
+		recv := <-sessionIDChan
 		if submit.sessionID == recv.SessionID {
-            fmtWriter(submit.errorBuffer, "%s\n", recv.ErrMessage)
-            break
+			fmtWriter(submit.errorBuffer, "%s\n", recv.ErrMessage)
+			break
 		}
 	}
 	println("check")
-
+	//tar copy
 	usercodeFile, _ := os.Open("cafecoderUsers/" + submit.sessionID + "/" + submit.sessionID)
+	content, err := ioutil.ReadAll(usercodeFile)
+	var buf bytes.Buffer
+	tw := tar.NewWriter(&buf)
+	_ = tw.WriteHeader(&tar.Header{
+		Name: "cafecoderUsers/" + submit.sessionID + "/Main" + langExtention[submit.lang], // filename
+		Mode: 0777,                                                                        // permissions
+		Size: int64(len(content)),                                                         // filesize
+	})
+	tw.Write(content)
+	tw.Close()
 	submit.containerCli.CopyToContainer(
 		context.TODO(), submit.containerID,
-		"cafecoderUsers/"+submit.sessionID+"/Main"+langExtention[submit.lang],
-		usercodeFile, types.CopyToContainerOptions{},
+		"/",
+		&buf, types.CopyToContainerOptions{},
 	)
 	usercodeFile.Close()
-
+	//
 	ret := compile(&submit, &sessionIDChan)
 	if ret == -1 {
 		fmtWriter(submit.resultBuffer, "%s,-1,undef,%s,0,", submit.sessionID, result[6])
@@ -480,7 +511,8 @@ func executeJudge(csv []string, tftpCli *tftp.Client, sessionIDChan chan cmdResu
 	for i := 0; i < submit.testcaseN; i++ {
 		fmtWriter(submit.resultBuffer, "%s,%d,", result[submit.testcaseResult[i]], submit.testcaseTime[i])
 	}
-    passResultTCP(submit, BackendHostPort)
+	passResultTCP(submit, BackendHostPort)
+	return
 }
 
 func main() {
