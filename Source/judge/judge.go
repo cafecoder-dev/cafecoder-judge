@@ -42,15 +42,19 @@ type cmdResultJSON struct {
 }
 
 type overAllResultJSON struct {
-	SessionID          string      `json:"sessionID"`
-	OverAllTime        int64       `json:"over_all_time"`
-	OverAllResult      string      `json:"over_all_result"`
-	OverAllScore       int         `json:"over_all_score"`
-	TestcaseN          int         `json:"testcase_n"`
-	TestcaseName       [100]string `json:"testcase_name"`
-	TestcaseResult     [100]string `json:"testcase_result"`
-	TestcaseMemoryUsed [100]int64  `json:"testcase_memory_used"`
-	TestcaseTime       [100]int64  `json:"testcase_time"`
+	SessionID     string            `json:"sessionID"`
+	OverAllTime   int64             `json:"over_all_time"`
+	OverAllResult string            `json:"over_all_result"`
+	OverAllScore  int               `json:"over_all_score"`
+	TestcaseN     int               `json:"testcase_n"`
+	Testcase      [100]testcaseJSON `json:"testcase"`
+}
+
+type testcaseJSON struct {
+	Name       string `json:"name"`
+	Result     string `json:"result"`
+	MemoryUsed int64  `json:"memory_used"`
+	Time       int64  `json:"time"`
 }
 
 type submitT struct {
@@ -494,7 +498,7 @@ func executeJudge(csv []string, tftpCli *tftp.Client, sessionIDChan chan cmdResu
 	//get container IP address
 	submit.containerInspect, _ = submit.containerCli.ContainerInspect(context.TODO(), submit.containerID)
 	/*----------------------------------------------------------------------------*/
-
+	println("check")
 	containerConn, err := net.Dial("tcp", submit.containerInspect.NetworkSettings.IPAddress+":8887")
 	if err != nil {
 		//fmtWriter(submit.errorBuffer, "%s\n", err)
