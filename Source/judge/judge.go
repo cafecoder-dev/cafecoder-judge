@@ -1,26 +1,27 @@
 package main
 
 import (
+	"./tftpwrapper"
 	"archive/tar"
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
-    "encoding/base64"
+	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/filters"
+	"github.com/docker/docker/client"
 	"io"
 	"io/ioutil"
 	"net"
 	"os"
+	"pack.ag/tftp"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/client"
-	"pack.ag/tftp"
 )
 
 const (
@@ -43,12 +44,12 @@ type cmdResultJSON struct {
 }
 
 type overAllResultJSON struct {
-	SessionID     string            `json:"sessionID"`
-	OverAllTime   int64             `json:"time"`
-	OverAllResult string            `json:"result"`
-	OverAllScore  int               `json:"score"`
-	ErrMessage string `json:"errMessage"`
-	Testcases      []testcaseJSON `json:"testcases"`
+	SessionID     string         `json:"sessionID"`
+	OverAllTime   int64          `json:"time"`
+	OverAllResult string         `json:"result"`
+	OverAllScore  int            `json:"score"`
+	ErrMessage    string         `json:"errMessage"`
+	Testcases     []testcaseJSON `json:"testcases"`
 }
 
 type testcaseJSON struct {
@@ -76,6 +77,7 @@ type submitT struct {
 	overallTime   int64
 	overallResult int
 
+	code             []byte
 	containerCli     *client.Client
 	containerID      string
 	containerInspect types.ContainerJSON
@@ -122,6 +124,10 @@ func containerStopAndRemove(submit submitT) {
 	if err != nil {
 		fmtWriter(submit.errorBuffer, "5:%s\n", err)
 	}
+	labelFilters := filters.NewArgs()
+	labelFilters.Add("name", submit.sessionID)
+	submit.containerCli.ContainersPrune(ctx, labelFilters)
+	fmt.Println("container " + submit.sessionID + " removed")
 
 }
 
@@ -282,8 +288,15 @@ func tryTestcase(submit *submitT, sessionIDChan *chan cmdResultJSON) int {
 		switch submit.lang {
 		case 0: //C11
 			requests.Command = "timeout 3 ./cafecoderUsers/" + submit.sessionID + "/Main.out"
+		case 1: //C++
+			requests.Command = "timeout 3 ./cafecoderUsers/" + submit.sessionID + "/Main.out"
 		case 2: //java8
-			requests.Command = "timeout 3 java -cp /cafecoderUsers/" + submit.sessionID + "/Main"
+			requests.Command = "cp " + " /cafecoderUsers/" + submit.sessionID + "/Main.class" + " ."
+			b, _ := json.Marshal(requests)
+			containerConn.Write(b)
+			containerConn.Close()
+			containerConn, err = net.Dial("tcp", submit.containerInspect.NetworkSettings.IPAddress+":8887")
+			requests.Command = "java cafecoderUsers/" + submit.sessionID + "/Main"
 		case 3: //python3
 			requests.Command = "timeout 3 python3 /cafecoderUsers/" + submit.sessionID + "/Main.py"
 		case 4: //C#
@@ -355,7 +368,7 @@ func tryTestcase(submit *submitT, sessionIDChan *chan cmdResultJSON) int {
 		}
 		if submit.testcaseResult[i] > submit.overallResult {
 			submit.overallResult = submit.testcaseResult[i]
-        }
+		}
 
 	}
 	return 0
@@ -363,26 +376,26 @@ func tryTestcase(submit *submitT, sessionIDChan *chan cmdResultJSON) int {
 
 func serveResult(overAllResult *overAllResultJSON, submit submitT, errorMessage string) {
 	var result = []string{"AC", "WA", "TLE", "RE", "MLE", "CE", "IE"}
-    fmt.Println("submit result");
+	fmt.Println("submit result")
 	overAllResult.SessionID = submit.sessionID
 	overAllResult.OverAllResult = result[submit.overallResult]
 	overAllResult.OverAllTime = submit.overallTime
 	overAllResult.OverAllScore = submit.score
-    testcases := make([]testcaseJSON, 0)
+	testcases := make([]testcaseJSON, 0)
 	for i := 0; i < submit.testcaseN; i++ {
-        var t testcaseJSON
+		var t testcaseJSON
 		t.Name = submit.testcaseName[i]
 		t.Result = result[submit.testcaseResult[i]]
-	    t.Time= submit.testcaseTime[i]
-	    t.MemoryUsed = submit.testcaseMemoryUsed[i]
-        testcases = append(testcases, t)
+		t.Time = submit.testcaseTime[i]
+		t.MemoryUsed = submit.testcaseMemoryUsed[i]
+		testcases = append(testcases, t)
 	}
-    overAllResult.Testcases = testcases
+	overAllResult.Testcases = testcases
 	overAllResult.ErrMessage = base64.StdEncoding.EncodeToString([]byte(submit.errorBuffer.String()))
 	b, _ := json.Marshal(*overAllResult)
-    back := submitT{resultBuffer: new(bytes.Buffer)}
+	back := submitT{resultBuffer: new(bytes.Buffer)}
 	fmtWriter(back.resultBuffer, "%s", string(b))
-    fmt.Println("pass TCP")
+	fmt.Println("pass TCP")
 	passResultTCP(back, BackendHostPort)
 }
 
@@ -462,12 +475,15 @@ func executeJudge(csv []string, tftpCli *tftp.Client, sessionIDChan chan cmdResu
 	submit.testcaseDirPath = csv[4]
 	submit.score, _ = strconv.Atoi(csv[5])
 
-	os.Mkdir("cafecoderUsers/"+submit.sessionID, 0777)
-	fileCopy("cafecoderUsers/"+submit.sessionID+"/"+submit.sessionID, submit.usercodePath)
-	defer os.Remove("cafecoderUsers/" + submit.sessionID)
-
 	//download file
-	//submit.code = tftpwrapper.DownloadFromPath(&tftpCli, submit.usercodePath)
+	submit.code = tftpwrapper.DownloadFromPath(&tftpCli, submit.usercodePath)
+
+	os.Mkdir("cafecoderUsers/"+submit.sessionID, 0777)
+	file, err := os.Create("cafecoderUsers/" + submit.sessionID + "/" + submit.sessionID)
+	file.Write(submit.code)
+	file.Close()
+	//fileCopy("cafecoderUsers/"+submit.sessionID+"/"+submit.sessionID, submit.usercodePath)
+	defer os.Remove("cafecoderUsers/" + submit.sessionID)
 
 	/*--------------------------------about docker--------------------------------*/
 	submit.containerCli, err = client.NewClientWithOpts(client.WithVersion("1.35"))
@@ -572,7 +588,7 @@ func executeJudge(csv []string, tftpCli *tftp.Client, sessionIDChan chan cmdResu
 	}
 
 	ret = tryTestcase(&submit, &sessionIDChan)
-    fmt.Println("test done")
+	fmt.Println("test done")
 	if ret == -1 {
 		//fmtWriter(submit.resultBuffer, "%s,-1,undef,%s,0,", submit.sessionID, result[6])
 		//passResultTCP(submit, BackendHostPort)
