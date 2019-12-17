@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+    "encoding/base64"
 	"io"
 	"io/ioutil"
 	"net"
@@ -43,11 +44,11 @@ type cmdResultJSON struct {
 
 type overAllResultJSON struct {
 	SessionID     string            `json:"sessionID"`
-	OverAllTime   int64             `json:"over_all_time"`
-	OverAllResult string            `json:"over_all_result"`
-	OverAllScore  int               `json:"over_all_score"`
-	TestcaseN     int               `json:"testcase_n"`
-	Testcase      [100]testcaseJSON `json:"testcase"`
+	OverAllTime   int64             `json:"time"`
+	OverAllResult string            `json:"result"`
+	OverAllScore  int               `json:"score"`
+	ErrMessage string `json:"errMessage"`
+	Testcases      []testcaseJSON `json:"testcases"`
 }
 
 type testcaseJSON struct {
@@ -99,10 +100,8 @@ func passResultTCP(submit submitT, hostAndPort string) {
 		return
 	}
 	passStr := strings.Trim(submit.resultBuffer.String(), "\n")
-	errStr := strings.Trim("error,"+submit.sessionID+","+submit.errorBuffer.String(), "\n") + "\n"
 	fmt.Println(passStr)
-	fmt.Println(errStr)
-	conn.Write([]byte(passStr + errStr))
+	conn.Write([]byte(passStr))
 	conn.Close()
 }
 
@@ -356,28 +355,35 @@ func tryTestcase(submit *submitT, sessionIDChan *chan cmdResultJSON) int {
 		}
 		if submit.testcaseResult[i] > submit.overallResult {
 			submit.overallResult = submit.testcaseResult[i]
-		}
+        }
+
 	}
 	return 0
 }
 
 func serveResult(overAllResult *overAllResultJSON, submit submitT, errorMessage string) {
 	var result = []string{"AC", "WA", "TLE", "RE", "MLE", "CE", "IE"}
+    fmt.Println("submit result");
 	overAllResult.SessionID = submit.sessionID
 	overAllResult.OverAllResult = result[submit.overallResult]
 	overAllResult.OverAllTime = submit.overallTime
-	overAllResult.TestcaseN = submit.testcaseN
 	overAllResult.OverAllScore = submit.score
+    testcases := make([]testcaseJSON, 0)
 	for i := 0; i < submit.testcaseN; i++ {
-		overAllResult.TestcaseName[i] = submit.testcaseName[i]
-		overAllResult.TestcaseResult[i] = result[submit.testcaseResult[i]]
-		overAllResult.TestcaseTime[i] = submit.testcaseTime[i]
-		overAllResult.TestcaseMemoryUsed[i] = submit.testcaseMemoryUsed[i]
+        var t testcaseJSON
+		t.Name = submit.testcaseName[i]
+		t.Result = result[submit.testcaseResult[i]]
+	    t.Time= submit.testcaseTime[i]
+	    t.MemoryUsed = submit.testcaseMemoryUsed[i]
+        testcases = append(testcases, t)
 	}
+    overAllResult.Testcases = testcases
+	overAllResult.ErrMessage = base64.StdEncoding.EncodeToString([]byte(submit.errorBuffer.String()))
 	b, _ := json.Marshal(*overAllResult)
-	fmtWriter(submit.resultBuffer, "%s", string(b))
-	fmtWriter(submit.errorBuffer, "%s", errorMessage)
-	passResultTCP(submit, BackendHostPort)
+    back := submitT{resultBuffer: new(bytes.Buffer)}
+	fmtWriter(back.resultBuffer, "%s", string(b))
+    fmt.Println("pass TCP")
+	passResultTCP(back, BackendHostPort)
 }
 
 func fileCopy(dstName string, srcName string) {
@@ -413,6 +419,7 @@ func executeJudge(csv []string, tftpCli *tftp.Client, sessionIDChan chan cmdResu
 	)
 	initSubmit(&submit)
 
+	submit.overallResult = 0
 	if len(csv) > 1 {
 		submit.sessionID = csv[1]
 	}
@@ -565,6 +572,7 @@ func executeJudge(csv []string, tftpCli *tftp.Client, sessionIDChan chan cmdResu
 	}
 
 	ret = tryTestcase(&submit, &sessionIDChan)
+    fmt.Println("test done")
 	if ret == -1 {
 		//fmtWriter(submit.resultBuffer, "%s,-1,undef,%s,0,", submit.sessionID, result[6])
 		//passResultTCP(submit, BackendHostPort)
@@ -584,7 +592,7 @@ func executeJudge(csv []string, tftpCli *tftp.Client, sessionIDChan chan cmdResu
 		}
 		passResultTCP(submit, BackendHostPort)
 	*/
-	serveResult(&overAllResult, submit, err.Error())
+	serveResult(&overAllResult, submit, "")
 	return
 }
 
