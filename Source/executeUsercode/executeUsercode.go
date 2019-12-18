@@ -2,12 +2,10 @@ package main
 
 import (
 	"encoding/json"
-    "io"
 	"fmt"
 	"net"
 	"os"
 	"os/exec"
-	"strings"
 	"time"
 )
 
@@ -36,6 +34,7 @@ func main() {
 		if err != nil {
 			continue //continue to receive request
 		}
+
 		var request requestJSON
 		json.NewDecoder(cnct).Decode(&request)
 		cnct.Close()
@@ -44,50 +43,68 @@ func main() {
 	}
 }
 
+func readError(cmdResult *cmdResultJSON) {
+	stderrFp, err := os.Open("cafecoderUsers/" + cmdResult.SessionID + "/userStderr.txt")
+	if err != nil {
+		cmdResult.ErrMessage = err.Error()
+	}
+	buf := make([]byte, 65536)
+	for {
+		n, err := stderrFp.Read(buf)
+		if n == 0 {
+			break
+		}
+		if err != nil {
+			cmdResult.ErrMessage = err.Error()
+
+			break
+		}
+		cmdResult.ErrMessage = string(buf[:n])
+	}
+	stderrFp.Close()
+}
+
 func executeJudge(request requestJSON) {
 	var cmdResult cmdResultJSON
 	cmdResult.SessionID = request.SessionID
 	if request.Mode == "judge" {
+		os.Mkdir("cafecoderUsers/"+request.SessionID, 0777)
+		cmd := exec.Command("sh", "-c", request.Command+" > cafecoderUsers/"+request.SessionID+"/userStdout.txt"+" 2> cafecoderUsers/"+request.SessionID+"/userStderr.txt")
+
 		start := time.Now().UnixNano()
-		cmdStr := strings.Split(request.Command, " ")
-        cmd :=  exec.Command(cmdStr[0], cmdStr[1:]...)
-        pipe , _ := cmd.StdinPipe() 
-        t , _ :=os.Open("cafecoderUsers/" + cmdResult.SessionID + "/testcase.txt")
-        defer t.Close()
-        defer pipe.Close()
-        io.Copy(pipe,t)
-		out, err := cmd.CombinedOutput()
-        o , _ := os.Create("cafecoderUsers/"+cmdResult.SessionID+"/userStdout.txt") 
-        defer o.Close()
-        o.WriteString(string(fmt.Sprintf("%s",out)))
-        e , _ := os.Create("cafecoderUsers/"+cmdResult.SessionID+"/userStderr.txt") 
-        defer e.Close()
-        e.WriteString(string( (fmt.Sprintf("%s",err) )))
+		err := cmd.Run()
 		end := time.Now().UnixNano()
 		cmdResult.Time = (end - start) / int64(time.Millisecond)
 		if err != nil {
 			cmdResult.Result = false
-			cmdResult.ErrMessage = string( fmt.Sprintf("%s",err)  )
+			cmdResult.ErrMessage = string(fmt.Sprintf("%s", err))
 		} else {
 			cmdResult.Result = true
 			cmdResult.ErrMessage = ""
 		}
+
+		readError(&cmdResult)
+
 	} else {
-		cmdStr := strings.Split(request.Command, " ")
-		_, err := exec.Command(cmdStr[0], cmdStr[1:]...).CombinedOutput()
+		err := exec.Command("sh", "-c", request.Command+" > cafecoderUsers/"+request.SessionID+"/userStdout.txt"+" 2> cafecoderUsers/"+request.SessionID+"/userStderr.txt").Run()
 		if err != nil {
-			cmdResult.Result = false 
-			cmdResult.ErrMessage = string( fmt.Sprintf("%s",err)  )
+			cmdResult.Result = false
+			cmdResult.ErrMessage = err.Error()
+
 		} else {
 			cmdResult.Result = true
 			cmdResult.ErrMessage = ""
 		}
+
+		readError(&cmdResult)
 	}
-	conn, err := net.Dial("tcp", "172.17.0.1:3344")
+
+	conn, err := net.Dial("tcp", "133.130.112.219:3344")
 	b, err := json.Marshal(cmdResult)
 	if err != nil {
 		conn.Write([]byte("err marshal"))
 	}
 	conn.Write(b)
 	conn.Close()
+
 }
