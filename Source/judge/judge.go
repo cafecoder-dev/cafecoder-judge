@@ -21,7 +21,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
 )
 
 const (
@@ -114,19 +113,12 @@ func containerStopAndRemove(submit submitT) {
 	if err != nil {
 		fmtWriter(submit.errorBuffer, "4:%s\n", err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	_, errC := submit.containerCli.ContainerWait(ctx, submit.containerID, "")
-	if err := <-errC; err != nil {
-		fmt.Println(err)
-	}
 	err = submit.containerCli.ContainerRemove(context.Background(), submit.containerID, types.ContainerRemoveOptions{RemoveVolumes: true, RemoveLinks: true, Force: true})
 	if err != nil {
 		fmtWriter(submit.errorBuffer, "5:%s\n", err)
 	}
-    labelFilters := filters.NewArgs()
-	labelFilters.Add("name", submit.sessionID)
-	submit.containerCli.ContainersPrune(ctx, labelFilters)
+	labelFilters := filters.NewArgs()
+	submit.containerCli.ContainersPrune(context.Background(), labelFilters)
 	fmt.Println("container " + submit.sessionID + " removed")
 
 }
@@ -171,8 +163,8 @@ func compile(submit *submitT, sessionIDChan *chan cmdResultJSON) int {
 		requests.Command = "g++" + " /cafecoderUsers/" + submit.sessionID + "/Main.cpp" + " -lm" + " -std=gnu++17" + " -o" + " /cafecoderUsers/" + submit.sessionID + "/Main.out"
 		submit.execFilePath = "/cafecoderUsers/" + submit.sessionID + "/Main.out"
 	case 2: //java8
-    requests.Command = "javac" + " /cafecoderUsers/" + submit.sessionID + "/Main.java"+" -d" +" /cafecoderUsers/"+submit.sessionID
-	submit.execFilePath = "/cafecoderUsers/" + submit.sessionID + "/Main.class"
+		requests.Command = "javac" + " /cafecoderUsers/" + submit.sessionID + "/Main.java" + " -d" + " /cafecoderUsers/" + submit.sessionID
+		submit.execFilePath = "/cafecoderUsers/" + submit.sessionID + "/Main.class"
 	case 3: //python3
 		requests.Command = "python3" + " -m" + " py_compile" + " /cafecoderUsers/" + submit.sessionID + "/Main.py"
 		submit.execFilePath = "/cafecoderUsers/" + submit.sessionID + "/Main.py"
@@ -221,7 +213,7 @@ func compile(submit *submitT, sessionIDChan *chan cmdResultJSON) int {
 	containerConn.Write(b)
 	containerConn.Close()
 	for {
-        fmt.Println("wating for chwon")
+		fmt.Println("wating for chwon")
 		recv := <-*sessionIDChan
 		if submit.sessionID == recv.SessionID {
 			fmtWriter(submit.errorBuffer, "%s\n", recv.ErrMessage)
@@ -292,7 +284,7 @@ func tryTestcase(submit *submitT, sessionIDChan *chan cmdResultJSON) int {
 		case 1: //C++
 			requests.Command = "timeout 3 ./cafecoderUsers/" + submit.sessionID + "/Main.out"
 		case 2: //java8
-			requests.Command = "timeout 3 java" + " -cp" + " /cafecoderUsers/"+submit.sessionID + " Main"
+			requests.Command = "timeout 3 java" + " -cp" + " /cafecoderUsers/" + submit.sessionID + " Main"
 		case 3: //python3
 			requests.Command = "timeout 3 python3 /cafecoderUsers/" + submit.sessionID + "/Main.py"
 		case 4: //C#
