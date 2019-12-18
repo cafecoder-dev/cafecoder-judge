@@ -124,7 +124,7 @@ func containerStopAndRemove(submit submitT) {
 	if err != nil {
 		fmtWriter(submit.errorBuffer, "5:%s\n", err)
 	}
-	labelFilters := filters.NewArgs()
+    labelFilters := filters.NewArgs()
 	labelFilters.Add("name", submit.sessionID)
 	submit.containerCli.ContainersPrune(ctx, labelFilters)
 	fmt.Println("container " + submit.sessionID + " removed")
@@ -221,6 +221,7 @@ func compile(submit *submitT, sessionIDChan *chan cmdResultJSON) int {
 	containerConn.Write(b)
 	containerConn.Close()
 	for {
+        fmt.Println("wating for chwon")
 		recv := <-*sessionIDChan
 		if submit.sessionID == recv.SessionID {
 			fmtWriter(submit.errorBuffer, "%s\n", recv.ErrMessage)
@@ -568,7 +569,6 @@ func executeJudge(csv []string, tftpCli *tftp.Client, sessionIDChan chan cmdResu
 	usercodeFile.Close()
 	//
 	ret := compile(&submit, &sessionIDChan)
-	containerStopAndRemove(submit)
 	if ret == -1 {
 		//fmtWriter(submit.resultBuffer, "%s,-1,undef,%s,0,", submit.sessionID, result[6])
 		//passResultTCP(submit, BackendHostPort)
