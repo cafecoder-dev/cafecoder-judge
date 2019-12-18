@@ -568,6 +568,7 @@ func executeJudge(csv []string, tftpCli *tftp.Client, sessionIDChan chan cmdResu
 	usercodeFile.Close()
 	//
 	ret := compile(&submit, &sessionIDChan)
+	containerStopAndRemove(submit)
 	if ret == -1 {
 		//fmtWriter(submit.resultBuffer, "%s,-1,undef,%s,0,", submit.sessionID, result[6])
 		//passResultTCP(submit, BackendHostPort)
