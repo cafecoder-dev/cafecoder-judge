@@ -171,8 +171,8 @@ func compile(submit *submitT, sessionIDChan *chan cmdResultJSON) int {
 		requests.Command = "g++" + " /cafecoderUsers/" + submit.sessionID + "/Main.cpp" + " -lm" + " -std=gnu++17" + " -o" + " /cafecoderUsers/" + submit.sessionID + "/Main.out"
 		submit.execFilePath = "/cafecoderUsers/" + submit.sessionID + "/Main.out"
 	case 2: //java8
-		requests.Command = "javac" + " /cafecoderUsers/" + submit.sessionID + "/Main.java" + " -d" + " /cafecoderUsers/" + submit.sessionID
-		submit.execFilePath = "/cafecoderUsers/" + submit.sessionID + "/Main.class"
+    requests.Command = "javac" + " /cafecoderUsers/" + submit.sessionID + "/Main.java"+" -d" +" /cafecoderUsers/"+submit.sessionID
+	submit.execFilePath = "/cafecoderUsers/" + submit.sessionID + "/Main.class"
 	case 3: //python3
 		requests.Command = "python3" + " -m" + " py_compile" + " /cafecoderUsers/" + submit.sessionID + "/Main.py"
 		submit.execFilePath = "/cafecoderUsers/" + submit.sessionID + "/Main.py"
@@ -186,7 +186,7 @@ func compile(submit *submitT, sessionIDChan *chan cmdResultJSON) int {
 
 	//I couldn't solve a problem in syntax-chack python3 code.
 	//Please teach me how to solve this problem:(
-	if submit.lang != 3 && submit.lang != 5 {
+	if submit.lang != 5 {
 		fmt.Println("go compile")
 		b, _ := json.Marshal(requests)
 		containerConn.Write(b)
@@ -291,12 +291,7 @@ func tryTestcase(submit *submitT, sessionIDChan *chan cmdResultJSON) int {
 		case 1: //C++
 			requests.Command = "timeout 3 ./cafecoderUsers/" + submit.sessionID + "/Main.out"
 		case 2: //java8
-			requests.Command = "cp " + " /cafecoderUsers/" + submit.sessionID + "/Main.class" + " ."
-			b, _ := json.Marshal(requests)
-			containerConn.Write(b)
-			containerConn.Close()
-			containerConn, err = net.Dial("tcp", submit.containerInspect.NetworkSettings.IPAddress+":8887")
-			requests.Command = "java cafecoderUsers/" + submit.sessionID + "/Main"
+			requests.Command = "timeout 3 java" + " -cp" + " /cafecoderUsers/"+submit.sessionID + " Main"
 		case 3: //python3
 			requests.Command = "timeout 3 python3 /cafecoderUsers/" + submit.sessionID + "/Main.py"
 		case 4: //C#
