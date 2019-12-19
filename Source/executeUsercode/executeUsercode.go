@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -59,7 +60,8 @@ func readError(cmdResult *cmdResultJSON) {
 
 			break
 		}
-		cmdResult.ErrMessage = string(buf[:n])
+		cmdResult.ErrMessage = base64.StdEncoding.EncodeToString(buf[:n])
+		//cmdResult.ErrMessage = string(buf[:n])
 	}
 	stderrFp.Close()
 }
