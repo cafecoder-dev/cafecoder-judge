@@ -21,6 +21,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 const (
@@ -85,6 +86,11 @@ type submitT struct {
 	errorBuffer  *bytes.Buffer
 }
 
+type commandChicket struct {
+	sync.Mutex
+	channel map[string]chan cmdResultJSON
+}
+
 func checkRegexp(reg, str string) bool {
 	return regexp.MustCompile(reg).Match([]byte(str))
 }
@@ -123,7 +129,7 @@ func containerStopAndRemove(submit submitT) {
 
 }
 
-func manageCommands(sessionIDChan *chan cmdResultJSON) {
+func manageCommands(commandChickets *commandChicket) {
 	listen, err := net.Listen("tcp", "0.0.0.0:3344")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%s\n", err)
@@ -139,7 +145,9 @@ func manageCommands(sessionIDChan *chan cmdResultJSON) {
 			cnct.Close()
 			println("connection closed")
 			fmt.Println(cmdResult)
-			go func() { *(sessionIDChan) <- cmdResult }()
+			go func() {
+				(*commandChickets).channel[cmdResult.SessionID] <- cmdResult
+			}()
 
 		}()
 	}
@@ -413,7 +421,7 @@ func initSubmit(submit *submitT) {
 	submit.overallTime = -1
 }
 
-func executeJudge(csv []string, tftpCli *tftp.Client, sessionIDChan chan cmdResultJSON) {
+func executeJudge(csv []string, tftpCli **tftp.Client, commandChickets *map[string]chan cmdResultJSON) {
 	var (
 		//result        = []string{"AC", "WA", "TLE", "RE", "MLE", "CE", "IE"}
 		langExtention = [...]string{".c", ".cpp", ".java", ".py", ".cs", ".rb"}
@@ -465,9 +473,11 @@ func executeJudge(csv []string, tftpCli *tftp.Client, sessionIDChan chan cmdResu
 	submit.lang, _ = strconv.Atoi(csv[3])
 	submit.testcaseDirPath = csv[4]
 	submit.score, _ = strconv.Atoi(csv[5])
+	sessionIDChan := (*commandChickets)[submit.sessionID]
+	defer func() { delete((*commandChickets), submit.sessionID) }()
 
 	//download file
-	submit.code = tftpwrapper.DownloadFromPath(&tftpCli, submit.usercodePath)
+	submit.code = tftpwrapper.DownloadFromPath(tftpCli, submit.usercodePath)
 
 	os.Mkdir("cafecoderUsers/"+submit.sessionID, 0777)
 	file, err := os.Create("cafecoderUsers/" + submit.sessionID + "/" + submit.sessionID)
@@ -604,9 +614,8 @@ func executeJudge(csv []string, tftpCli *tftp.Client, sessionIDChan chan cmdResu
 }
 
 func main() {
-
-	sessionIDChan := make(chan cmdResultJSON)
-	go manageCommands(&sessionIDChan)
+	commandChickets := commandChicket{channel: make(map[string]chan cmdResultJSON)}
+	go manageCommands(&commandChickets)
 	listen, err := net.Listen("tcp", "0.0.0.0:8888")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%s\n", err)
@@ -625,6 +634,7 @@ func main() {
 		//reader := csv.NewReader(messageLen)
 		cnct.Close()
 		println("connection closed")
-		go executeJudge(strings.Split(message, ","), tftpCli, sessionIDChan)
+		commandChickets.channel[strings.Split(message, ",")[1]] = make(chan cmdResultJSON)
+		go executeJudge(strings.Split(message, ","), &tftpCli, &commandChickets.channel)
 	}
 }
