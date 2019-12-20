@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"os"
 	"os/exec"
@@ -46,24 +47,18 @@ func main() {
 
 func readError(cmdResult *cmdResultJSON) {
 	stderrFp, err := os.Open("cafecoderUsers/" + cmdResult.SessionID + "/userStderr.txt")
+	defer stderrFp.Close()
 	if err != nil {
 		cmdResult.ErrMessage = err.Error()
 	}
 	buf := make([]byte, 65536)
-	for {
-		n, err := stderrFp.Read(buf)
-		if n == 0 {
-			break
-		}
-		if err != nil {
-			cmdResult.ErrMessage = err.Error()
-
-			break
-		}
-		cmdResult.ErrMessage = base64.StdEncoding.EncodeToString(buf[:n])
-		//cmdResult.ErrMessage = string(buf[:n])
+	buf, err = ioutil.ReadAll(stderrFp)
+	if err != nil {
+		cmdResult.ErrMessage = err.Error()
+		return
 	}
-	stderrFp.Close()
+	cmdResult.ErrMessage = base64.StdEncoding.EncodeToString(buf)
+	//cmdResult.ErrMessage = string(buf[:n])
 }
 
 func executeJudge(request requestJSON) {
@@ -79,29 +74,26 @@ func executeJudge(request requestJSON) {
 		cmdResult.Time = (end - start) / int64(time.Millisecond)
 		if err != nil {
 			cmdResult.Result = false
-			cmdResult.ErrMessage = string(fmt.Sprintf("%s", err))
 		} else {
 			cmdResult.Result = true
-			cmdResult.ErrMessage = ""
 		}
 
 		readError(&cmdResult)
 
 	} else {
+		os.Mkdir("cafecoderUsers/"+request.SessionID, 0777)
 		err := exec.Command("sh", "-c", request.Command+" > cafecoderUsers/"+request.SessionID+"/userStdout.txt"+" 2> cafecoderUsers/"+request.SessionID+"/userStderr.txt").Run()
 		if err != nil {
 			cmdResult.Result = false
-			cmdResult.ErrMessage = err.Error()
 
 		} else {
 			cmdResult.Result = true
-			cmdResult.ErrMessage = ""
 		}
 
 		readError(&cmdResult)
 	}
 
-	conn, err := net.Dial("tcp", "133.130.112.219:3344")
+	conn, err := net.Dial("tcp", "172.17.0.1:3344")
 	b, err := json.Marshal(cmdResult)
 	if err != nil {
 		conn.Write([]byte("err marshal"))

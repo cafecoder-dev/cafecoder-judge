@@ -124,7 +124,6 @@ func containerStopAndRemove(submit submitT) {
 }
 
 func manageCommands(sessionIDChan *chan cmdResultJSON) {
-	var cmdResult cmdResultJSON
 	listen, err := net.Listen("tcp", "0.0.0.0:3344")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%s\n", err)
@@ -134,11 +133,15 @@ func manageCommands(sessionIDChan *chan cmdResultJSON) {
 		if err != nil {
 			continue //continue to receive request
 		}
-		json.NewDecoder(cnct).Decode(&cmdResult)
-		cnct.Close()
-		println("connection closed")
-		fmt.Println(cmdResult)
-		go func() { *(sessionIDChan) <- cmdResult }()
+		go func() {
+			var cmdResult cmdResultJSON
+			json.NewDecoder(cnct).Decode(&cmdResult)
+			cnct.Close()
+			println("connection closed")
+			fmt.Println(cmdResult)
+			go func() { *(sessionIDChan) <- cmdResult }()
+
+		}()
 	}
 }
 
