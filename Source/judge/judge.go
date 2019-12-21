@@ -635,7 +635,12 @@ func main() {
 		//reader := csv.NewReader(messageLen)
 		cnct.Close()
 		println("connection closed")
-		commandChickets.channel[strings.Split(message, ",")[1]] = make(chan cmdResultJSON)
-		go executeJudge(strings.Split(message, ","), &tftpCli, &commandChickets.channel)
+		session := strings.Split(message, ",")
+		if len(session) < 1 {
+			println(session)
+			continue
+		}
+		commandChickets.channel[session[1]] = make(chan cmdResultJSON)
+		go executeJudge(session, &tftpCli, &commandChickets.channel)
 	}
 }
