@@ -299,7 +299,7 @@ func tryTestcase(submit *submitT, sessionIDChan *chan cmdResultJSON) int {
 		case 3: //python3
 			requests.Command = "timeout 3 python3 /cafecoderUsers/" + submit.sessionID + "/Main.py"
 		case 4: //C#
-			requests.Command = "timeout 3 mono /cafecoderUsers/" + submit.sessionID + "/Main.out"
+			requests.Command = "timeout 3 mono /cafecoderUsers/" + submit.sessionID + "/Main.exe"
 		case 5: //Ruby
 			requests.Command = "timeout 3 ./cafecoderUsers/" + submit.sessionID + "/Main.out"
 		}
