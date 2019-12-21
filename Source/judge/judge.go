@@ -1,27 +1,27 @@
 package main
 
 import (
-	"./tftpwrapper"
 	"archive/tar"
 	"bufio"
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/filters"
-	"github.com/docker/docker/client"
 	"io"
 	"io/ioutil"
 	"net"
 	"os"
-	"pack.ag/tftp"
 	"regexp"
 	"strconv"
 	"strings"
 	"sync"
+
+	"./tftpwrapper"
+	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/filters"
+	"github.com/docker/docker/client"
+	"pack.ag/tftp"
 )
 
 const (
@@ -390,7 +390,8 @@ func serveResult(overAllResult *overAllResultJSON, submit submitT, errorMessage 
 		testcases = append(testcases, t)
 	}
 	overAllResult.Testcases = testcases
-	overAllResult.ErrMessage = base64.StdEncoding.EncodeToString([]byte(submit.errorBuffer.String()))
+	//overAllResult.ErrMessage = base64.StdEncoding.EncodeToString([]byte(submit.errorBuffer.String()))
+	overAllResult.ErrMessage = submit.errorBuffer.String()
 	b, _ := json.Marshal(*overAllResult)
 	back := submitT{resultBuffer: new(bytes.Buffer)}
 	fmtWriter(back.resultBuffer, "%s", string(b))
