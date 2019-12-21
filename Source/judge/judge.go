@@ -636,7 +636,7 @@ func main() {
 		cnct.Close()
 		println("connection closed")
 		session := strings.Split(message, ",")
-		if len(session) < 1 {
+		if len(session) <= 2 {
 			println(session)
 			continue
 		}
