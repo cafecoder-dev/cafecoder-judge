@@ -235,7 +235,7 @@ func compile(submit *submitT, sessionIDChan *chan cmdResultJSON) int {
 	return 0
 }
 
-func tryTestcase(submit *submitT, sessionIDChan *chan cmdResultJSON) int {
+func tryTestcase(submit *submitT, sessionIDChan *chan cmdResultJSON, overAllResult *overAllResultJSON) int {
 	var (
 		//stderr     bytes.Buffer
 		requests     requestJSON
@@ -258,6 +258,7 @@ func tryTestcase(submit *submitT, sessionIDChan *chan cmdResultJSON) int {
 
 	for i := 0; i < submit.testcaseN; i++ {
 		testcaseName[i] = strings.TrimSpace(testcaseName[i]) //delete \n\r
+		submit.testcaseName[i] = strings.TrimSpace(testcaseName[i])
 		outputTestcase, err := ioutil.ReadFile(submit.testcaseDirPath + "/out/" + testcaseName[i])
 		if err != nil {
 			fmtWriter(submit.errorBuffer, "%s\n", err)
@@ -589,7 +590,7 @@ func executeJudge(csv []string, tftpCli **tftp.Client, commandChickets *map[stri
 		return
 	}
 
-	ret = tryTestcase(&submit, &sessionIDChan)
+	ret = tryTestcase(&submit, &sessionIDChan, &overAllResult)
 	fmt.Println("test done")
 	if ret == -1 {
 		//fmtWriter(submit.resultBuffer, "%s,-1,undef,%s,0,", submit.sessionID, result[6])
