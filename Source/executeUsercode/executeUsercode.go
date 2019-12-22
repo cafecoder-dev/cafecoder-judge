@@ -66,7 +66,7 @@ func executeJudge(request requestJSON) {
 	cmdResult.SessionID = request.SessionID
 	if request.Mode == "judge" {
 		os.Mkdir("cafecoderUsers/"+request.SessionID, 0777)
-		cmd := exec.Command("sh", "-c", request.Command+" > cafecoderUsers/"+request.SessionID+"/userStdout.txt"+" 2> cafecoderUsers/"+request.SessionID+"/userStderr.txt")
+		cmd := exec.Command("sh", "-c", request.Command+"< cafecoderUsers/"+request.SessionID+"/testcase.txt > cafecoderUsers/"+request.SessionID+"/userStdout.txt"+" 2> cafecoderUsers/"+request.SessionID+"/userStderr.txt")
 
 		start := time.Now().UnixNano()
 		err := cmd.Run()
