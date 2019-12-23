@@ -146,6 +146,8 @@ func manageCommands(commandChickets *commandChicket) {
 			cnct.Close()
 			println("connection closed")
 			fmt.Println(cmdResult)
+			data, _ := base64.StdEncoding.DecodeString(cmdResult.ErrMessage)
+			cmdResult.ErrMessage = string(data)
 			go func() {
 				(*commandChickets).channel[cmdResult.SessionID] <- cmdResult
 			}()
@@ -491,6 +493,7 @@ func executeJudge(csv []string, tftpCli **tftp.Client, commandChickets *map[stri
 
 	/*--------------------------------about docker--------------------------------*/
 	submit.containerCli, err = client.NewClientWithOpts(client.WithVersion("1.35"))
+	defer submit.containerCli.Close()
 	if err != nil {
 		//fmtWriter(submit.errorBuffer, "%s\n", err)
 		//passResultTCP(submit, BackendHostPort)
