@@ -15,6 +15,7 @@ case $1 in
     2 ) sudo -u rbash_user timeout 3 java -cp ./cafecoderUsers/$2/ Main < cafecoderUsers/$2/testcase.txt > cafecoderUsers/$2/userStdout.txt 2> cafecoderUsers/$2/userStderr.txt;;#java8
     3 ) sudo -u rbash_user timeout 3 python3 /cafecoderUsers/$2/Main.py < cafecoderUsers/$2/testcase.txt > cafecoderUsers/$2/userStdout.txt 2> cafecoderUsers/$2/userStderr.txt;;#python3
     4 ) sudo -u rbash_user timeout 3 mono ./cafecoderUsers/$2/Main.exe < cafecoderUsers/$2/testcase.txt > cafecoderUsers/$2/userStdout.txt 2> cafecoderUsers/$2/userStderr.txt;;#c#
+    6 ) sudo -u rbash_user timeout 3 ./cafecoderUsers/$2/Main.out < cafecoderUsers/$2/testcase.txt > cafecoderUsers/$2/userStdout.txt 2> cafecoderUsers/$2/userStderr.txt;;#NIM
 esac
 rm cafecoderUsers/$2/testcase.txt
 

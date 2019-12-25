@@ -245,6 +245,11 @@ func languageCommand(submit *submitT) {
 				submit.compileCmd = "ruby" + " -cw" + " /cafecoderUsers/" + submit.sessionID + "/Main.rb"
 				submit.execFilePath = "/cafecoderUsers/" + submit.sessionID + "/Main.rb"
 		*/
+	case 6:
+		submit.executeCmd = "timeout 3 ./cafecoderUsers/" + submit.sessionID + "/Main.out"
+		submit.compileCmd = "nim cpp -d:release" + " -o:" + " /cafecoderUsers/" + submit.sessionID + "/Main.out"
+		submit.execFilePath = "/cafecoderUsers/" + submit.sessionID + "/Main.out"
+
 	}
 }
 
@@ -435,7 +440,7 @@ func createContainer(submit *submitT, overAllResult overAllResultJSON) error {
 func executeJudge(csv []string, tftpCli **tftp.Client, commandChickets *map[string]chan cmdResultJSON) {
 	var (
 		//result        = []string{"AC", "WA", "TLE", "RE", "MLE", "CE", "IE"}
-		langExtention = [...]string{".c", ".cpp", ".java", ".py", ".cs", ".rb"}
+		langExtention = [...]string{".c", ".cpp", ".java", ".py", ".cs", ".rb", ".nim"}
 		submit        = submitT{errorBuffer: new(bytes.Buffer), resultBuffer: new(bytes.Buffer)}
 		err           error
 		overAllResult overAllResultJSON

@@ -188,6 +188,9 @@ func compile(submit *submitT, sessionIDChan *chan cmdResultJSON) int {
 	case 5: //Ruby
 		requests.Command = "ruby" + " -cw" + " /cafecoderUsers/" + submit.sessionID + "/Main.rb"
 		submit.execFilePath = "/cafecoderUsers/" + submit.sessionID + "/Main.rb"
+	case 6: //NIM
+		requests.Command = "nim cpp" + " -o:" + " /cafecoderUsers/" + submit.sessionID + "/Main.out" + " -d:release" + " /cafecoderUsers/" + submit.sessionID + "/Main.nim"
+		submit.execFilePath = "/cafecoderUsers/" + submit.sessionID + "/Main.out"
 	}
 
 	//I couldn't solve a problem in syntax-chack python3 code.
