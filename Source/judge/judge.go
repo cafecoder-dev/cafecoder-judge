@@ -394,7 +394,11 @@ func serveResult(overAllResult *overAllResultJSON, submit submitT, errorMessage 
 		testcases = append(testcases, t)
 	}
 	overAllResult.Testcases = testcases
-	overAllResult.ErrMessage = base64.StdEncoding.EncodeToString([]byte(submit.errorBuffer.String()))
+	if submit.overallResult == 5 { //output errMessage if result is CE
+		overAllResult.ErrMessage = base64.StdEncoding.EncodeToString([]byte(submit.errorBuffer.String()))
+	} else {
+		overAllResult.ErrMessage = ""
+	}
 	//overAllResult.ErrMessage = submit.errorBuffer.String()
 	b, _ := json.Marshal(*overAllResult)
 	back := submitT{resultBuffer: new(bytes.Buffer)}
@@ -645,7 +649,11 @@ func main() {
 			println(session)
 			continue
 		}
-		commandChickets.channel[session[1]] = make(chan cmdResultJSON)
-		go executeJudge(session, &tftpCli, &commandChickets.channel)
+		if _, exist := commandChickets.channel[session[1]]; exist { //if sessionID exists...
+			fmt.Fprintf(os.Stdout, "%s has already existed\n", session[1])
+		} else {
+			commandChickets.channel[session[1]] = make(chan cmdResultJSON)
+			go executeJudge(session, &tftpCli, &commandChickets.channel)
+		}
 	}
 }
