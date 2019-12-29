@@ -34,7 +34,7 @@ type requestJSON struct {
 	SessionID string `json:"sessionID"`
 	Command   string `json:"command"`
 	Mode      string `json:"mode"` //Mode ... "judge" or "others"
-	//Lang      string `json:"lang"` //Lang ... c11,c++17,java8,python3,c#,ruby
+	//Lang      string `json:"lang"` //Lang ... c11,c++17,java8,python3,c#,ruby,nim
 }
 
 type cmdResultJSON struct {
@@ -308,6 +308,8 @@ func tryTestcase(submit *submitT, sessionIDChan *chan cmdResultJSON, overAllResu
 		case 4: //C#
 			requests.Command = "timeout 3 mono /cafecoderUsers/" + submit.sessionID + "/Main.exe"
 		case 5: //Ruby
+			requests.Command = "timeout 3 ./cafecoderUsers/" + submit.sessionID + "/Main.rb"
+		case 6: //NIM
 			requests.Command = "timeout 3 ./cafecoderUsers/" + submit.sessionID + "/Main.out"
 		}
 		requests.Mode = "judge"
@@ -432,7 +434,7 @@ func initSubmit(submit *submitT) {
 func executeJudge(csv []string, tftpCli **tftp.Client, commandChickets *map[string]chan cmdResultJSON) {
 	var (
 		//result        = []string{"AC", "WA", "TLE", "RE", "MLE", "CE", "IE"}
-		langExtention = [...]string{".c", ".cpp", ".java", ".py", ".cs", ".rb"}
+		langExtention = [...]string{".c", ".cpp", ".java", ".py", ".cs", ".rb", ".nim"}
 		submit        = submitT{errorBuffer: new(bytes.Buffer), resultBuffer: new(bytes.Buffer)}
 		err           error
 		overAllResult overAllResultJSON

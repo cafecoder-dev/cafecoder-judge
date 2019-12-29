@@ -13,6 +13,7 @@ apt install gcc -y && \
 apt install g++ -y  && \
 apt install default-jdk -y && \
 apt install python3 -y && \
+apt install nim -y && \
 apt install apt-transport-https dirmngr -y && \
 useradd -m rbash_user && \
 mkdir cafecoderUsers && \

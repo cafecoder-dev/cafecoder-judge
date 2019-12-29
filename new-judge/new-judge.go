@@ -33,7 +33,7 @@ type requestJSON struct {
 	SessionID string `json:"sessionID"`
 	Command   string `json:"command"`
 	Mode      string `json:"mode"` //Mode ... "judge" or "others"
-	//Lang      string `json:"lang"` //Lang ... c11,c++17,java8,python3,c#,ruby
+	//Lang      string `json:"lang"` //Lang ... c11,c++17,java8,python3,c#,ruby,nim
 }
 
 type cmdResultJSON struct {
