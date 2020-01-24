@@ -5,7 +5,9 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -31,9 +33,10 @@ const (
 )
 
 type requestJSON struct {
-	SessionID string `json:"sessionID"`
-	Command   string `json:"command"`
-	Mode      string `json:"mode"` //Mode ... "judge" or "others"
+	SessionID     string `json:"sessionID"`
+	Command       string `json:"command"`
+	Mode          string `json:"mode"` //Mode ... "judge" or "others"
+	DirectoryName string `json:"directoryName"`
 	//Lang      string `json:"lang"` //Lang ... c11,c++17,java8,python3,c#,ruby
 }
 
@@ -66,6 +69,8 @@ type submitT struct {
 	lang            int
 	testcaseDirPath string
 	score           int
+
+	directoryName string
 
 	execDirPath        string
 	execFilePath       string
@@ -168,26 +173,26 @@ func compile(submit *submitT, sessionIDChan *chan cmdResultJSON) int {
 	}
 
 	requests.SessionID = submit.sessionID
-	submit.execDirPath = "/cafecoderUsers/" + submit.sessionID
+	submit.execDirPath = "/cafecoderUsers/" + submit.directoryName
 	switch submit.lang {
 	case 0: //C11
-		requests.Command = "gcc" + " /cafecoderUsers/" + submit.sessionID + "/Main.c" + " -lm" + " -std=gnu11" + " -o" + " /cafecoderUsers/" + submit.sessionID + "/Main.out"
-		submit.execFilePath = "/cafecoderUsers/" + submit.sessionID + "/Main.out"
+		requests.Command = "gcc" + " /cafecoderUsers/" + submit.directoryName + "/Main.c" + " -lm" + " -std=gnu11" + " -o" + " /cafecoderUsers/" + submit.directoryName + "/Main.out"
+		submit.execFilePath = "/cafecoderUsers/" + submit.directoryName + "/Main.out"
 	case 1: //C++17
-		requests.Command = "g++" + " /cafecoderUsers/" + submit.sessionID + "/Main.cpp" + " -lm" + " -std=gnu++17" + " -o" + " /cafecoderUsers/" + submit.sessionID + "/Main.out"
-		submit.execFilePath = "/cafecoderUsers/" + submit.sessionID + "/Main.out"
+		requests.Command = "g++" + " /cafecoderUsers/" + submit.directoryName + "/Main.cpp" + " -lm" + " -std=gnu++17" + " -o" + " /cafecoderUsers/" + submit.directoryName + "/Main.out"
+		submit.execFilePath = "/cafecoderUsers/" + submit.directoryName + "/Main.out"
 	case 2: //java8
-		requests.Command = "javac" + " /cafecoderUsers/" + submit.sessionID + "/Main.java" + " -d" + " /cafecoderUsers/" + submit.sessionID
-		submit.execFilePath = "/cafecoderUsers/" + submit.sessionID + "/Main.class"
+		requests.Command = "javac" + " /cafecoderUsers/" + submit.directoryName + "/Main.java" + " -d" + " /cafecoderUsers/" + submit.directoryName
+		submit.execFilePath = "/cafecoderUsers/" + submit.directoryName + "/Main.class"
 	case 3: //python3
-		requests.Command = "python3" + " -m" + " py_compile" + " /cafecoderUsers/" + submit.sessionID + "/Main.py"
-		submit.execFilePath = "/cafecoderUsers/" + submit.sessionID + "/Main.py"
+		requests.Command = "python3" + " -m" + " py_compile" + " /cafecoderUsers/" + submit.directoryName + "/Main.py"
+		submit.execFilePath = "/cafecoderUsers/" + submit.directoryName + "/Main.py"
 	case 4: //C#
-		requests.Command = "mcs" + " /cafecoderUsers/" + submit.sessionID + "/Main.cs" + " -out:/cafecoderUsers/" + submit.sessionID + "/Main.exe"
-		submit.execFilePath = "/cafecoderUsers/" + submit.sessionID + "/Main.exe"
+		requests.Command = "mcs" + " /cafecoderUsers/" + submit.directoryName + "/Main.cs" + " -out:/cafecoderUsers/" + submit.directoryName + "/Main.exe"
+		submit.execFilePath = "/cafecoderUsers/" + submit.directoryName + "/Main.exe"
 	case 5: //Ruby
-		requests.Command = "ruby" + " -cw" + " /cafecoderUsers/" + submit.sessionID + "/Main.rb"
-		submit.execFilePath = "/cafecoderUsers/" + submit.sessionID + "/Main.rb"
+		requests.Command = "ruby" + " -cw" + " /cafecoderUsers/" + submit.directoryName + "/Main.rb"
+		submit.execFilePath = "/cafecoderUsers/" + submit.directoryName + "/Main.rb"
 	}
 
 	//I couldn't solve a problem in syntax-chack python3 code.
@@ -274,9 +279,9 @@ func tryTestcase(submit *submitT, sessionIDChan *chan cmdResultJSON, overAllResu
 		var buf bytes.Buffer
 		tw := tar.NewWriter(&buf)
 		_ = tw.WriteHeader(&tar.Header{
-			Name: "/cafecoderUsers/" + submit.sessionID + "/testcase.txt", // filename
-			Mode: 0744,                                                    // permissions
-			Size: int64(len(content)),                                     // filesize
+			Name: "/cafecoderUsers/" + submit.directoryName + "/testcase.txt", // filename
+			Mode: 0744,                                                        // permissions
+			Size: int64(len(content)),                                         // filesize
 		})
 		tw.Write(content)
 		tw.Close()
@@ -295,17 +300,17 @@ func tryTestcase(submit *submitT, sessionIDChan *chan cmdResultJSON, overAllResu
 		}
 		switch submit.lang {
 		case 0: //C11
-			requests.Command = "timeout 3 ./cafecoderUsers/" + submit.sessionID + "/Main.out"
+			requests.Command = "timeout 3 ./cafecoderUsers/" + submit.directoryName + "/Main.out"
 		case 1: //C++
-			requests.Command = "timeout 3 ./cafecoderUsers/" + submit.sessionID + "/Main.out"
+			requests.Command = "timeout 3 ./cafecoderUsers/" + submit.directoryName + "/Main.out"
 		case 2: //java8
-			requests.Command = "timeout 3 java" + " -cp" + " /cafecoderUsers/" + submit.sessionID + " Main"
+			requests.Command = "timeout 3 java" + " -cp" + " /cafecoderUsers/" + submit.directoryName + " Main"
 		case 3: //python3
-			requests.Command = "timeout 3 python3 /cafecoderUsers/" + submit.sessionID + "/Main.py"
+			requests.Command = "timeout 3 python3 /cafecoderUsers/" + submit.directoryName + "/Main.py"
 		case 4: //C#
-			requests.Command = "timeout 3 mono /cafecoderUsers/" + submit.sessionID + "/Main.exe"
+			requests.Command = "timeout 3 mono /cafecoderUsers/" + submit.directoryName + "/Main.exe"
 		case 5: //Ruby
-			requests.Command = "timeout 3 ./cafecoderUsers/" + submit.sessionID + "/Main.out"
+			requests.Command = "timeout 3 ./cafecoderUsers/" + submit.directoryName + "/Main.out"
 		}
 		requests.Mode = "judge"
 		b, _ := json.Marshal(requests)
@@ -320,7 +325,7 @@ func tryTestcase(submit *submitT, sessionIDChan *chan cmdResultJSON, overAllResu
 			}
 		}
 
-		userStdoutReader, _, err := submit.containerCli.CopyFromContainer(context.TODO(), submit.sessionID, "cafecoderUsers/"+submit.sessionID+"/userStdout.txt")
+		userStdoutReader, _, err := submit.containerCli.CopyFromContainer(context.TODO(), submit.sessionID, "cafecoderUsers/"+submit.directoryName+"/userStdout.txt")
 		if err != nil {
 			fmtWriter(submit.errorBuffer, "1:%s\n", err)
 			return -1
@@ -330,7 +335,7 @@ func tryTestcase(submit *submitT, sessionIDChan *chan cmdResultJSON, overAllResu
 		userStdout := new(bytes.Buffer)
 		userStdout.ReadFrom(tr)
 
-		userStderrReader, _, err := submit.containerCli.CopyFromContainer(context.TODO(), submit.sessionID, "cafecoderUsers/"+submit.sessionID+"/userStderr.txt")
+		userStderrReader, _, err := submit.containerCli.CopyFromContainer(context.TODO(), submit.sessionID, "cafecoderUsers/"+submit.directoryName+"/userStderr.txt")
 		if err != nil {
 			fmtWriter(submit.errorBuffer, "2:%s\n", err)
 			return -1
@@ -484,16 +489,18 @@ func executeJudge(csv []string, tftpCli **tftp.Client, commandChickets *map[stri
 	submit.score, _ = strconv.Atoi(csv[5])
 	sessionIDChan := (*commandChickets)[submit.sessionID]
 	defer func() { delete((*commandChickets), submit.sessionID) }()
+	hash := sha256.Sum256([]byte(submit.sessionID))
+	submit.directoryName = hex.EncodeToString(hash[:])
 
 	//download file
 	submit.code = tftpwrapper.DownloadFromPath(tftpCli, submit.usercodePath)
 
-	os.Mkdir("cafecoderUsers/"+submit.sessionID, 0777)
-	file, err := os.Create("cafecoderUsers/" + submit.sessionID + "/" + submit.sessionID)
+	os.Mkdir("cafecoderUsers/"+submit.directoryName, 0777)
+	file, err := os.Create("cafecoderUsers/" + submit.directoryName + "/" + submit.directoryName)
 	file.Write(submit.code)
 	file.Close()
 	//fileCopy("cafecoderUsers/"+submit.sessionID+"/"+submit.sessionID, submit.usercodePath)
-	defer os.Remove("cafecoderUsers/" + submit.sessionID)
+	defer os.Remove("cafecoderUsers/" + submit.directoryName)
 
 	/*--------------------------------about docker--------------------------------*/
 	submit.containerCli, err = client.NewClientWithOpts(client.WithVersion("1.35"))
@@ -543,7 +550,7 @@ func executeJudge(csv []string, tftpCli **tftp.Client, commandChickets *map[stri
 	}
 
 	var requests requestJSON
-	requests.Command = "mkdir -p cafecoderUsers/" + submit.sessionID
+	requests.Command = "mkdir -p cafecoderUsers/" + submit.directoryName
 	requests.SessionID = submit.sessionID
 	b, err := json.Marshal(requests)
 	if err != nil {
@@ -565,14 +572,14 @@ func executeJudge(csv []string, tftpCli **tftp.Client, commandChickets *map[stri
 	}
 	println("check")
 	//tar copy
-	usercodeFile, _ := os.Open("cafecoderUsers/" + submit.sessionID + "/" + submit.sessionID)
+	usercodeFile, _ := os.Open("cafecoderUsers/" + submit.directoryName + "/" + submit.directoryName)
 	content, err := ioutil.ReadAll(usercodeFile)
 	var buf bytes.Buffer
 	tw := tar.NewWriter(&buf)
 	_ = tw.WriteHeader(&tar.Header{
-		Name: "cafecoderUsers/" + submit.sessionID + "/Main" + langExtention[submit.lang], // filename
-		Mode: 0777,                                                                        // permissions
-		Size: int64(len(content)),                                                         // filesize
+		Name: "cafecoderUsers/" + submit.directoryName + "/Main" + langExtention[submit.lang], // filename
+		Mode: 0777,                                                                            // permissions
+		Size: int64(len(content)),                                                             // filesize
 	})
 	tw.Write(content)
 	tw.Close()
