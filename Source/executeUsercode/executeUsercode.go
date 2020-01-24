@@ -19,10 +19,10 @@ type cmdResultJSON struct {
 }
 
 type requestJSON struct {
-	SessionID string `json:"sessionID"`
-
-	Command string `json:"command"`
-	Mode    string `json:"mode"` //Mode ... "judge" or "others"
+	SessionID     string `json:"sessionID"`
+	DirectoryName string `json:"directoryName"`
+	Command       string `json:"command"`
+	Mode          string `json:"mode"` //Mode ... "judge" or "others"
 	//Lang      string `json:"lang"` //Lang ... c11,c++17,java8,python3,c#,ruby
 }
 
@@ -45,8 +45,8 @@ func main() {
 	}
 }
 
-func readError(cmdResult *cmdResultJSON) {
-	stderrFp, err := os.Open("cafecoderUsers/" + cmdResult.SessionID + "/userStderr.txt")
+func readError(cmdResult *cmdResultJSON, directoryName string) {
+	stderrFp, err := os.Open("cafecoderUsers/" + directoryName + "/userStderr.txt")
 	defer stderrFp.Close()
 	if err != nil {
 		cmdResult.ErrMessage = err.Error()
@@ -65,8 +65,8 @@ func executeJudge(request requestJSON) {
 	var cmdResult cmdResultJSON
 	cmdResult.SessionID = request.SessionID
 	if request.Mode == "judge" {
-		os.Mkdir("cafecoderUsers/"+request.SessionID, 0777)
-		cmd := exec.Command("sh", "-c", request.Command+"< cafecoderUsers/"+request.SessionID+"/testcase.txt > cafecoderUsers/"+request.SessionID+"/userStdout.txt"+" 2> cafecoderUsers/"+request.SessionID+"/userStderr.txt")
+		os.Mkdir("cafecoderUsers/"+request.DirectoryName, 0777)
+		cmd := exec.Command("sh", "-c", request.Command+"< cafecoderUsers/"+request.DirectoryName+"/testcase.txt > cafecoderUsers/"+request.DirectoryName+"/userStdout.txt"+" 2> cafecoderUsers/"+request.DirectoryName+"/userStderr.txt")
 
 		start := time.Now().UnixNano()
 		err := cmd.Run()
@@ -78,11 +78,11 @@ func executeJudge(request requestJSON) {
 			cmdResult.Result = true
 		}
 
-		readError(&cmdResult)
+		readError(&cmdResult, request.DirectoryName)
 
 	} else {
-		os.Mkdir("cafecoderUsers/"+request.SessionID, 0777)
-		err := exec.Command("sh", "-c", request.Command+" > cafecoderUsers/"+request.SessionID+"/userStdout.txt"+" 2> cafecoderUsers/"+request.SessionID+"/userStderr.txt").Run()
+		os.Mkdir("cafecoderUsers/"+request.DirectoryName, 0777)
+		err := exec.Command("sh", "-c", request.Command+" > cafecoderUsers/"+request.DirectoryName+"/userStdout.txt"+" 2> cafecoderUsers/"+request.DirectoryName+"/userStderr.txt").Run()
 		if err != nil {
 			cmdResult.Result = false
 
@@ -90,7 +90,7 @@ func executeJudge(request requestJSON) {
 			cmdResult.Result = true
 		}
 
-		readError(&cmdResult)
+		readError(&cmdResult, request.DirectoryName)
 	}
 
 	conn, err := net.Dial("tcp", "172.17.0.1:3344")
