@@ -69,7 +69,17 @@ func executeJudge(request requestJSON) {
 		cmd := exec.Command("sh", "-c", request.Command+"< cafecoderUsers/"+request.DirectoryName+"/testcase.txt > cafecoderUsers/"+request.DirectoryName+"/userStdout.txt"+" 2> cafecoderUsers/"+request.DirectoryName+"/userStderr.txt")
 
 		start := time.Now().UnixNano()
-		err := cmd.Run()
+		err := cmd.Start()
+		done := make(chan error)
+		go func() { done <- cmd.Wait() }()
+		timeout := time.After(2 * time.Second)
+		select {
+		case <-timeout:
+			// Timeout happened first, kill the process and print a message.
+			cmd.Process.Kill()
+			fmt.Println("Command timed out")
+
+		}
 		end := time.Now().UnixNano()
 		cmdResult.Time = (end - start) / int64(time.Millisecond)
 		if err != nil {
