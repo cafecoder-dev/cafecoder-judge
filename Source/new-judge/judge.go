@@ -127,8 +127,8 @@ func judge(submit submitT, tftpCli **tftp.Client, commandChickets *map[string]ch
 
 	if !validationChack(submit) {
 		result.Result = "IE"
-		fmt.Fprintf(submit.errorBuffer,"validationChack() Error\n")
-		sendResult(&result,submit)
+		fmt.Fprintf(submit.errorBuffer, "validationChack() Error\n")
+		sendResult(&result, submit)
 		return
 	}
 
@@ -150,8 +150,8 @@ func judge(submit submitT, tftpCli **tftp.Client, commandChickets *map[string]ch
 	err := createContainer(&submit)
 	if err != nil {
 		result.Result = "IE"
-		fmt.Fprintf(submit.errorBuffer,"%s\n",err.Error())
-		sendResult(&result,submit)
+		fmt.Fprintf(submit.errorBuffer, "%s\n", err.Error())
+		sendResult(&result, submit)
 		return
 	}
 	defer operateContainer(submit)
@@ -165,24 +165,29 @@ func judge(submit submitT, tftpCli **tftp.Client, commandChickets *map[string]ch
 	recv, err := reqCmd(&sessionIDChan, submit, "mkdir -p cafecoderUsers/"+submit.dirName, "others")
 	if !recv.Result || err != nil {
 		result.Result = "IE"
-		fmt.Fprintf(submit.errorBuffer,"%s\n",err.Error())
-		sendResult(&result,submit)
+		fmt.Fprintf(submit.errorBuffer, "%s\n", err.Error())
+		sendResult(&result, submit)
 		return
 	}
+
+	tarCopy(
+		submit, "cafecoderUsers/"+submit.dirName+"/"+submit.dirName,
+		"cafecoderUsers/"+submit.dirName+"/Main"+submit.extension,
+	)
 
 	err = compile(submit, &sessionIDChan, &result)
 	if result.Result == "CE" || err != nil {
 		//finish judge...
-		fmt.Fprintf(submit.errorBuffer,"%s\n",err.Error())
-		sendResult(&result,submit)
+		fmt.Fprintf(submit.errorBuffer, "%s\n", err.Error())
+		sendResult(&result, submit)
 		return
 	}
 
 	err = tryTestcase(submit, &sessionIDChan, &result)
 	if err != nil {
 		result.Result = "IE"
-		fmt.Fprintf(submit.errorBuffer,"%s\n",err.Error())
-		sendResult(&result,submit)
+		fmt.Fprintf(submit.errorBuffer, "%s\n", err.Error())
+		sendResult(&result, submit)
 	}
 
 	for i := 0; i < result.TestcaseN; i++ {
@@ -193,16 +198,16 @@ func judge(submit submitT, tftpCli **tftp.Client, commandChickets *map[string]ch
 			result.Result = result.Testcases[i].Result
 		}
 	}
-	sendResult(&result,submit)
+	sendResult(&result, submit)
 
 	return
 }
 
-func sendResult(result *resultJSON,submit submitT){
-	result.ErrMessage=base64.StdEncoding.EncodeToString([]byte(submit.errorBuffer.String()))
-	b,_:=json.Marshal(*result)
-	back:=submitT{resultBuffer:new(bytes.Buffer)}
-	fmt.Fprintf(back.resultBuffer,"%s\n",string(b))
+func sendResult(result *resultJSON, submit submitT) {
+	result.ErrMessage = base64.StdEncoding.EncodeToString([]byte(submit.errorBuffer.String()))
+	b, _ := json.Marshal(*result)
+	back := submitT{resultBuffer: new(bytes.Buffer)}
+	fmt.Fprintf(back.resultBuffer, "%s\n", string(b))
 	passResultTCP(back, BackendHostPort)
 }
 
@@ -381,7 +386,9 @@ func createContainer(submit *submitT) error {
 	if err != nil {
 		return err
 	}
-	config := &container.Config{Image: "cafecoder"}
+	config := &container.Config{
+		Image: "cafecoder",
+	}
 	resp, err := submit.containerCli.ContainerCreate(context.TODO(), config, nil, nil, strings.TrimSpace(submit.SessionID))
 	if err != nil {
 		return err

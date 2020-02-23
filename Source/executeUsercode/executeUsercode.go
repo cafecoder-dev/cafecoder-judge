@@ -67,9 +67,13 @@ func executeJudge(request requestJSON) {
 	if request.Mode == "judge" {
 		os.Mkdir("cafecoderUsers/"+request.DirectoryName, 0777)
 		cmd := exec.Command("sh", "-c", request.Command+"< cafecoderUsers/"+request.DirectoryName+"/testcase.txt > cafecoderUsers/"+request.DirectoryName+"/userStdout.txt"+" 2> cafecoderUsers/"+request.DirectoryName+"/userStderr.txt")
-
+		cmdResult.ErrMessage = "testtesttest"
 		start := time.Now().UnixNano()
 		err := cmd.Start()
+		if err != nil {
+			fmt.Println("start exception")
+			cmdResult.ErrMessage += "start exception\n"
+		}
 		done := make(chan error)
 		go func() { done <- cmd.Wait() }()
 		timeout := time.After(2 * time.Second)
@@ -78,7 +82,12 @@ func executeJudge(request requestJSON) {
 			// Timeout happened first, kill the process and print a message.
 			cmd.Process.Kill()
 			fmt.Println("Command timed out")
-
+			cmdResult.ErrMessage += "Command timed out\n"
+		case err := <-done:
+			if err != nil {
+				fmt.Println("exception")
+				cmdResult.ErrMessage += "exception\n"
+			}
 		}
 		end := time.Now().UnixNano()
 		cmdResult.Time = (end - start) / int64(time.Millisecond)
@@ -91,6 +100,7 @@ func executeJudge(request requestJSON) {
 		readError(&cmdResult, request.DirectoryName)
 
 	} else {
+		cmdResult.ErrMessage = "testtesttest"
 		os.Mkdir("cafecoderUsers/"+request.DirectoryName, 0777)
 		err := exec.Command("sh", "-c", request.Command+" > cafecoderUsers/"+request.DirectoryName+"/userStdout.txt"+" 2> cafecoderUsers/"+request.DirectoryName+"/userStderr.txt").Run()
 		if err != nil {

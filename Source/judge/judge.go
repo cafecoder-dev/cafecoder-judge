@@ -14,6 +14,7 @@ import (
 	"io/ioutil"
 	"net"
 	"os"
+	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
@@ -29,7 +30,7 @@ import (
 
 const (
 	//BackendHostPort ... appear IP-address and port-number
-	BackendHostPort = "localhost:5963"
+	BackendHostPort = "133.130.101.250:5963"
 )
 
 type requestJSON struct {
@@ -263,13 +264,15 @@ func tryTestcase(submit *submitT, sessionIDChan *chan cmdResultJSON, overAllResu
 		submit.testcaseN++
 	}
 	testcaseListFile.Close()
+	fmt.Printf("N = %d", submit.testcaseN)
 
 	for i := 0; i < submit.testcaseN; i++ {
 		testcaseName[i] = strings.TrimSpace(testcaseName[i]) //delete \n\r
 		submit.testcaseName[i] = strings.TrimSpace(testcaseName[i])
 		outputTestcase, err := ioutil.ReadFile(submit.testcaseDirPath + "/out/" + testcaseName[i])
 		if err != nil {
-			fmtWriter(submit.errorBuffer, "%s\n", err)
+			fmt.Printf("272.readfile error : %s\n", err)
+			fmtWriter(submit.errorBuffer, "272.readfile error : %s\n", err)
 			return -1
 		}
 
@@ -295,24 +298,26 @@ func tryTestcase(submit *submitT, sessionIDChan *chan cmdResultJSON, overAllResu
 
 		containerConn, err := net.Dial("tcp", submit.containerInspect.NetworkSettings.IPAddress+":8887")
 		if err != nil {
-			fmtWriter(submit.errorBuffer, "%s\n", err)
+			fmt.Printf("298.readfile error : %s\n", err)
+			fmtWriter(submit.errorBuffer, "298.readfile error : %s\n", err)
 			return -1
 		}
 		switch submit.lang {
 		case 0: //C11
-			requests.Command = "timeout 3 ./cafecoderUsers/" + submit.directoryName + "/Main.out"
+			requests.Command = "./cafecoderUsers/" + submit.directoryName + "/Main.out"
 		case 1: //C++
-			requests.Command = "timeout 3 ./cafecoderUsers/" + submit.directoryName + "/Main.out"
+			requests.Command = "./cafecoderUsers/" + submit.directoryName + "/Main.out"
 		case 2: //java8
-			requests.Command = "timeout 3 java" + " -cp" + " /cafecoderUsers/" + submit.directoryName + " Main"
+			requests.Command = "java" + " -cp" + " /cafecoderUsers/" + submit.directoryName + " Main"
 		case 3: //python3
-			requests.Command = "timeout 3 python3 /cafecoderUsers/" + submit.directoryName + "/Main.py"
+			requests.Command = "python3 /cafecoderUsers/" + submit.directoryName + "/Main.py"
 		case 4: //C#
-			requests.Command = "timeout 3 mono /cafecoderUsers/" + submit.directoryName + "/Main.exe"
+			requests.Command = "mono /cafecoderUsers/" + submit.directoryName + "/Main.exe"
 		case 5: //Ruby
-			requests.Command = "timeout 3 ./cafecoderUsers/" + submit.directoryName + "/Main.out"
+			requests.Command = "./cafecoderUsers/" + submit.directoryName + "/Main.out"
 		}
 		requests.Mode = "judge"
+		requests.DirectoryName = submit.directoryName
 		b, _ := json.Marshal(requests)
 		containerConn.Write(b)
 		containerConn.Close()
@@ -324,10 +329,12 @@ func tryTestcase(submit *submitT, sessionIDChan *chan cmdResultJSON, overAllResu
 				break
 			}
 		}
+		fmt.Println(recv)
 
 		userStdoutReader, _, err := submit.containerCli.CopyFromContainer(context.TODO(), submit.sessionID, "cafecoderUsers/"+submit.directoryName+"/userStdout.txt")
 		if err != nil {
-			fmtWriter(submit.errorBuffer, "1:%s\n", err)
+			fmt.Printf("330.cp error :%s\n", err)
+			fmtWriter(submit.errorBuffer, "330.cp error :%s\n", err)
 			return -1
 		}
 		tr := tar.NewReader(userStdoutReader)
@@ -337,7 +344,8 @@ func tryTestcase(submit *submitT, sessionIDChan *chan cmdResultJSON, overAllResu
 
 		userStderrReader, _, err := submit.containerCli.CopyFromContainer(context.TODO(), submit.sessionID, "cafecoderUsers/"+submit.directoryName+"/userStderr.txt")
 		if err != nil {
-			fmtWriter(submit.errorBuffer, "2:%s\n", err)
+			fmt.Printf("340.cp error :%s\n", err)
+			fmtWriter(submit.errorBuffer, "340.cp error :%s\n", err)
 			return -1
 		}
 		tr = tar.NewReader(userStderrReader)
@@ -378,6 +386,8 @@ func tryTestcase(submit *submitT, sessionIDChan *chan cmdResultJSON, overAllResu
 			submit.overallResult = submit.testcaseResult[i]
 		}
 
+		userStderrReader.Close()
+		userStdoutReader.Close()
 	}
 	return 0
 }
@@ -455,6 +465,7 @@ func executeJudge(csv []string, tftpCli **tftp.Client, commandChickets *map[stri
 			fmtWriter(submit.errorBuffer, "too many args\n")
 			passResultTCP(submit, BackendHostPort)
 		*/
+		println("too many args")
 		submit.overallResult = 6
 		serveResult(&overAllResult, submit, "too many args")
 		return
@@ -466,6 +477,7 @@ func executeJudge(csv []string, tftpCli **tftp.Client, commandChickets *map[stri
 			passResultTCP(submit, BackendHostPort)
 		*/
 		submit.overallResult = 6
+		println("too few args")
 		serveResult(&overAllResult, submit, "too few args")
 		return
 	}
@@ -477,6 +489,7 @@ func executeJudge(csv []string, tftpCli **tftp.Client, commandChickets *map[stri
 			//fmtWriter(submit.errorBuffer, "Inputs are included another characters[0-9],[a-z],[A-Z],'.','/','_'\n")
 			//passResultTCP(submit, BackendHostPort)
 			submit.overallResult = 6
+			println("Inputs are included another characters[0-9],[a-z],[A-Z],'.','/','_'")
 			serveResult(&overAllResult, submit, "Inputs are included another characters[0-9],[a-z],[A-Z],'.','/','_'")
 			return
 		}
@@ -491,6 +504,8 @@ func executeJudge(csv []string, tftpCli **tftp.Client, commandChickets *map[stri
 	hash := sha256.Sum256([]byte(submit.sessionID))
 	submit.directoryName = hex.EncodeToString(hash[:])
 
+	//println(submit.usercodePath)
+
 	//download file
 	submit.code = tftpwrapper.DownloadFromPath(tftpCli, submit.usercodePath)
 
@@ -499,7 +514,7 @@ func executeJudge(csv []string, tftpCli **tftp.Client, commandChickets *map[stri
 	file.Write(submit.code)
 	file.Close()
 	//fileCopy("cafecoderUsers/"+submit.sessionID+"/"+submit.sessionID, submit.usercodePath)
-	defer os.Remove("cafecoderUsers/" + submit.directoryName)
+	defer exec.Command("rm", "-r", "cafecoderUsers/*").Run()
 
 	/*--------------------------------about docker--------------------------------*/
 	submit.containerCli, err = client.NewClientWithOpts(client.WithVersion("1.35"))
@@ -508,9 +523,11 @@ func executeJudge(csv []string, tftpCli **tftp.Client, commandChickets *map[stri
 		//fmtWriter(submit.errorBuffer, "%s\n", err)
 		//passResultTCP(submit, BackendHostPort)
 		submit.overallResult = 6
+		println("container error")
 		serveResult(&overAllResult, submit, err.Error())
 		return
 	}
+
 	config := &container.Config{
 
 		Image: "cafecoder",
@@ -520,9 +537,11 @@ func executeJudge(csv []string, tftpCli **tftp.Client, commandChickets *map[stri
 		//fmtWriter(submit.errorBuffer, "2:%s\n", err)
 		//passResultTCP(submit, BackendHostPort)
 		submit.overallResult = 6
+		println(err.Error())
 		serveResult(&overAllResult, submit, err.Error())
 		return
 	}
+
 	submit.containerID = resp.ID
 	err = submit.containerCli.ContainerStart(context.TODO(), submit.containerID, types.ContainerStartOptions{})
 	if err != nil {
@@ -538,7 +557,6 @@ func executeJudge(csv []string, tftpCli **tftp.Client, commandChickets *map[stri
 	//get container IP address
 	submit.containerInspect, _ = submit.containerCli.ContainerInspect(context.TODO(), submit.containerID)
 	/*----------------------------------------------------------------------------*/
-	println("check")
 	containerConn, err := net.Dial("tcp", submit.containerInspect.NetworkSettings.IPAddress+":8887")
 	if err != nil {
 		//fmtWriter(submit.errorBuffer, "%s\n", err)
@@ -569,7 +587,7 @@ func executeJudge(csv []string, tftpCli **tftp.Client, commandChickets *map[stri
 			break
 		}
 	}
-	println("check")
+
 	//tar copy
 	usercodeFile, _ := os.Open("cafecoderUsers/" + submit.directoryName + "/" + submit.directoryName)
 	content, err := ioutil.ReadAll(usercodeFile)
@@ -588,7 +606,7 @@ func executeJudge(csv []string, tftpCli **tftp.Client, commandChickets *map[stri
 		&buf, types.CopyToContainerOptions{},
 	)
 	usercodeFile.Close()
-	//
+	println("checked")
 	ret := compile(&submit, &sessionIDChan)
 	if ret == -1 {
 		//fmtWriter(submit.resultBuffer, "%s,-1,undef,%s,0,", submit.sessionID, result[6])
