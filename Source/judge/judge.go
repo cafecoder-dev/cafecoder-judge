@@ -14,6 +14,7 @@ import (
 	"io/ioutil"
 	"net"
 	"os"
+	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
@@ -29,7 +30,7 @@ import (
 
 const (
 	//BackendHostPort ... appear IP-address and port-number
-	BackendHostPort = "localhost:5963"
+	BackendHostPort = "133.130.101.250:5963"
 )
 
 type requestJSON struct {
@@ -70,10 +71,13 @@ type submitT struct {
 	testcaseDirPath string
 	score           int
 
+	compileCmd   string
+	executeCmd   string
+	execDirPath  string
+	execFilePath string
+
 	directoryName string
 
-	execDirPath        string
-	execFilePath       string
 	testcaseN          int
 	testcaseName       [100]string
 	testcaseTime       [100]int64
@@ -161,6 +165,38 @@ func manageCommands(commandChickets *commandChicket) {
 	}
 }
 
+func langConfig(submit *submitT) {
+	submit.execDirPath = "/cafecoderUsers/" + submit.directoryName
+	switch submit.lang {
+	case 0: //C11
+		submit.compileCmd = "gcc" + " /cafecoderUsers/" + submit.directoryName + "/Main.c" + " -O2 " + " -lm" + " -std=gnu11" + " -o" + " /cafecoderUsers/" + submit.directoryName + "/Main.out"
+		submit.execFilePath = "/cafecoderUsers/" + submit.directoryName + "/Main.out"
+		submit.executeCmd = "./cafecoderUsers/" + submit.directoryName + "/Main.out"
+	case 1: //C++17
+		submit.compileCmd = "g++" + " /cafecoderUsers/" + submit.directoryName + "/Main.cpp" + " -O2 " + " -lm" + " -std=gnu++17" + " -o" + " /cafecoderUsers/" + submit.directoryName + "/Main.out"
+		submit.execFilePath = "/cafecoderUsers/" + submit.directoryName + "/Main.out"
+		submit.executeCmd = "./cafecoderUsers/" + submit.directoryName + "/Main.out"
+	case 2: //java8
+		submit.compileCmd = "javac" + " /cafecoderUsers/" + submit.directoryName + "/Main.java" + " -d" + " /cafecoderUsers/" + submit.directoryName
+		submit.execFilePath = "/cafecoderUsers/" + submit.directoryName + "/Main.class"
+		submit.executeCmd = "java" + " -cp" + " /cafecoderUsers/" + submit.directoryName + " Main"
+	case 3: //python3
+		submit.compileCmd = "python3" + " -m" + " py_compile" + " /cafecoderUsers/" + submit.directoryName + "/Main.py"
+		submit.execFilePath = "/cafecoderUsers/" + submit.directoryName + "/Main.py"
+		submit.executeCmd = "python3 /cafecoderUsers/" + submit.directoryName + "/Main.py"
+	case 4: //C#
+		submit.compileCmd = "mcs" + " /cafecoderUsers/" + submit.directoryName + "/Main.cs" + " -out:/cafecoderUsers/" + submit.directoryName + "/Main.exe"
+		submit.execFilePath = "/cafecoderUsers/" + submit.directoryName + "/Main.exe"
+		submit.executeCmd = "mono /cafecoderUsers/" + submit.directoryName + "/Main.exe"
+	case 5: //golang
+		submit.compileCmd = "go build " + submit.directoryName + " /Main.go -o " + "/cafecoderUsers/" + submit.directoryName + "/Main.out"
+		submit.execFilePath = "/cafecoderUsers/" + submit.directoryName + "/Main.out"
+		submit.executeCmd = "./cafecoderUsers/" + submit.directoryName + "/Main.out"
+	
+	}
+
+}
+
 func compile(submit *submitT, sessionIDChan *chan cmdResultJSON) int {
 	var (
 		err      error
@@ -173,30 +209,7 @@ func compile(submit *submitT, sessionIDChan *chan cmdResultJSON) int {
 	}
 
 	requests.SessionID = submit.sessionID
-	submit.execDirPath = "/cafecoderUsers/" + submit.directoryName
-	switch submit.lang {
-	case 0: //C11
-		requests.Command = "gcc" + " /cafecoderUsers/" + submit.directoryName + "/Main.c" + " -lm" + " -std=gnu11" + " -o" + " /cafecoderUsers/" + submit.directoryName + "/Main.out"
-		submit.execFilePath = "/cafecoderUsers/" + submit.directoryName + "/Main.out"
-	case 1: //C++17
-		requests.Command = "g++" + " /cafecoderUsers/" + submit.directoryName + "/Main.cpp" + " -lm" + " -std=gnu++17" + " -o" + " /cafecoderUsers/" + submit.directoryName + "/Main.out"
-		submit.execFilePath = "/cafecoderUsers/" + submit.directoryName + "/Main.out"
-	case 2: //java8
-		requests.Command = "javac" + " /cafecoderUsers/" + submit.directoryName + "/Main.java" + " -d" + " /cafecoderUsers/" + submit.directoryName
-		submit.execFilePath = "/cafecoderUsers/" + submit.directoryName + "/Main.class"
-	case 3: //python3
-		requests.Command = "python3" + " -m" + " py_compile" + " /cafecoderUsers/" + submit.directoryName + "/Main.py"
-		submit.execFilePath = "/cafecoderUsers/" + submit.directoryName + "/Main.py"
-	case 4: //C#
-		requests.Command = "mcs" + " /cafecoderUsers/" + submit.directoryName + "/Main.cs" + " -out:/cafecoderUsers/" + submit.directoryName + "/Main.exe"
-		submit.execFilePath = "/cafecoderUsers/" + submit.directoryName + "/Main.exe"
-	case 5: //Ruby
-		requests.Command = "ruby" + " -cw" + " /cafecoderUsers/" + submit.directoryName + "/Main.rb"
-		submit.execFilePath = "/cafecoderUsers/" + submit.directoryName + "/Main.rb"
-	}
 
-	//I couldn't solve a problem in syntax-chack python3 code.
-	//Please teach me how to solve this problem:(
 	if submit.lang != 5 {
 		fmt.Println("go compile")
 		b, _ := json.Marshal(requests)
@@ -263,13 +276,15 @@ func tryTestcase(submit *submitT, sessionIDChan *chan cmdResultJSON, overAllResu
 		submit.testcaseN++
 	}
 	testcaseListFile.Close()
+	fmt.Printf("N = %d", submit.testcaseN)
 
 	for i := 0; i < submit.testcaseN; i++ {
 		testcaseName[i] = strings.TrimSpace(testcaseName[i]) //delete \n\r
 		submit.testcaseName[i] = strings.TrimSpace(testcaseName[i])
 		outputTestcase, err := ioutil.ReadFile(submit.testcaseDirPath + "/out/" + testcaseName[i])
 		if err != nil {
-			fmtWriter(submit.errorBuffer, "%s\n", err)
+			fmt.Printf("272.readfile error : %s\n", err)
+			fmtWriter(submit.errorBuffer, "272.readfile error : %s\n", err)
 			return -1
 		}
 
@@ -295,24 +310,13 @@ func tryTestcase(submit *submitT, sessionIDChan *chan cmdResultJSON, overAllResu
 
 		containerConn, err := net.Dial("tcp", submit.containerInspect.NetworkSettings.IPAddress+":8887")
 		if err != nil {
-			fmtWriter(submit.errorBuffer, "%s\n", err)
+			fmt.Printf("298.readfile error : %s\n", err)
+			fmtWriter(submit.errorBuffer, "298.readfile error : %s\n", err)
 			return -1
 		}
-		switch submit.lang {
-		case 0: //C11
-			requests.Command = "timeout 3 ./cafecoderUsers/" + submit.directoryName + "/Main.out"
-		case 1: //C++
-			requests.Command = "timeout 3 ./cafecoderUsers/" + submit.directoryName + "/Main.out"
-		case 2: //java8
-			requests.Command = "timeout 3 java" + " -cp" + " /cafecoderUsers/" + submit.directoryName + " Main"
-		case 3: //python3
-			requests.Command = "timeout 3 python3 /cafecoderUsers/" + submit.directoryName + "/Main.py"
-		case 4: //C#
-			requests.Command = "timeout 3 mono /cafecoderUsers/" + submit.directoryName + "/Main.exe"
-		case 5: //Ruby
-			requests.Command = "timeout 3 ./cafecoderUsers/" + submit.directoryName + "/Main.out"
-		}
+
 		requests.Mode = "judge"
+		requests.DirectoryName = submit.directoryName
 		b, _ := json.Marshal(requests)
 		containerConn.Write(b)
 		containerConn.Close()
@@ -324,10 +328,12 @@ func tryTestcase(submit *submitT, sessionIDChan *chan cmdResultJSON, overAllResu
 				break
 			}
 		}
+		fmt.Println(recv)
 
 		userStdoutReader, _, err := submit.containerCli.CopyFromContainer(context.TODO(), submit.sessionID, "cafecoderUsers/"+submit.directoryName+"/userStdout.txt")
 		if err != nil {
-			fmtWriter(submit.errorBuffer, "1:%s\n", err)
+			fmt.Printf("330.cp error :%s\n", err)
+			fmtWriter(submit.errorBuffer, "330.cp error :%s\n", err)
 			return -1
 		}
 		tr := tar.NewReader(userStdoutReader)
@@ -337,7 +343,8 @@ func tryTestcase(submit *submitT, sessionIDChan *chan cmdResultJSON, overAllResu
 
 		userStderrReader, _, err := submit.containerCli.CopyFromContainer(context.TODO(), submit.sessionID, "cafecoderUsers/"+submit.directoryName+"/userStderr.txt")
 		if err != nil {
-			fmtWriter(submit.errorBuffer, "2:%s\n", err)
+			fmt.Printf("340.cp error :%s\n", err)
+			fmtWriter(submit.errorBuffer, "340.cp error :%s\n", err)
 			return -1
 		}
 		tr = tar.NewReader(userStderrReader)
@@ -378,6 +385,8 @@ func tryTestcase(submit *submitT, sessionIDChan *chan cmdResultJSON, overAllResu
 			submit.overallResult = submit.testcaseResult[i]
 		}
 
+		userStderrReader.Close()
+		userStdoutReader.Close()
 	}
 	return 0
 }
@@ -455,6 +464,7 @@ func executeJudge(csv []string, tftpCli **tftp.Client, commandChickets *map[stri
 			fmtWriter(submit.errorBuffer, "too many args\n")
 			passResultTCP(submit, BackendHostPort)
 		*/
+		println("too many args")
 		submit.overallResult = 6
 		serveResult(&overAllResult, submit, "too many args")
 		return
@@ -466,6 +476,7 @@ func executeJudge(csv []string, tftpCli **tftp.Client, commandChickets *map[stri
 			passResultTCP(submit, BackendHostPort)
 		*/
 		submit.overallResult = 6
+		println("too few args")
 		serveResult(&overAllResult, submit, "too few args")
 		return
 	}
@@ -477,6 +488,7 @@ func executeJudge(csv []string, tftpCli **tftp.Client, commandChickets *map[stri
 			//fmtWriter(submit.errorBuffer, "Inputs are included another characters[0-9],[a-z],[A-Z],'.','/','_'\n")
 			//passResultTCP(submit, BackendHostPort)
 			submit.overallResult = 6
+			println("Inputs are included another characters[0-9],[a-z],[A-Z],'.','/','_'")
 			serveResult(&overAllResult, submit, "Inputs are included another characters[0-9],[a-z],[A-Z],'.','/','_'")
 			return
 		}
@@ -491,6 +503,10 @@ func executeJudge(csv []string, tftpCli **tftp.Client, commandChickets *map[stri
 	hash := sha256.Sum256([]byte(submit.sessionID))
 	submit.directoryName = hex.EncodeToString(hash[:])
 
+	langConfig(&submit)
+
+	//println(submit.usercodePath)
+
 	//download file
 	submit.code = tftpwrapper.DownloadFromPath(tftpCli, submit.usercodePath)
 
@@ -499,7 +515,7 @@ func executeJudge(csv []string, tftpCli **tftp.Client, commandChickets *map[stri
 	file.Write(submit.code)
 	file.Close()
 	//fileCopy("cafecoderUsers/"+submit.sessionID+"/"+submit.sessionID, submit.usercodePath)
-	defer os.Remove("cafecoderUsers/" + submit.directoryName)
+	defer exec.Command("rm", "-r", "cafecoderUsers/*").Run()
 
 	/*--------------------------------about docker--------------------------------*/
 	submit.containerCli, err = client.NewClientWithOpts(client.WithVersion("1.35"))
@@ -508,9 +524,11 @@ func executeJudge(csv []string, tftpCli **tftp.Client, commandChickets *map[stri
 		//fmtWriter(submit.errorBuffer, "%s\n", err)
 		//passResultTCP(submit, BackendHostPort)
 		submit.overallResult = 6
+		println("container error")
 		serveResult(&overAllResult, submit, err.Error())
 		return
 	}
+
 	config := &container.Config{
 
 		Image: "cafecoder",
@@ -520,9 +538,11 @@ func executeJudge(csv []string, tftpCli **tftp.Client, commandChickets *map[stri
 		//fmtWriter(submit.errorBuffer, "2:%s\n", err)
 		//passResultTCP(submit, BackendHostPort)
 		submit.overallResult = 6
+		println(err.Error())
 		serveResult(&overAllResult, submit, err.Error())
 		return
 	}
+
 	submit.containerID = resp.ID
 	err = submit.containerCli.ContainerStart(context.TODO(), submit.containerID, types.ContainerStartOptions{})
 	if err != nil {
@@ -538,7 +558,6 @@ func executeJudge(csv []string, tftpCli **tftp.Client, commandChickets *map[stri
 	//get container IP address
 	submit.containerInspect, _ = submit.containerCli.ContainerInspect(context.TODO(), submit.containerID)
 	/*----------------------------------------------------------------------------*/
-	println("check")
 	containerConn, err := net.Dial("tcp", submit.containerInspect.NetworkSettings.IPAddress+":8887")
 	if err != nil {
 		//fmtWriter(submit.errorBuffer, "%s\n", err)
@@ -569,7 +588,7 @@ func executeJudge(csv []string, tftpCli **tftp.Client, commandChickets *map[stri
 			break
 		}
 	}
-	println("check")
+
 	//tar copy
 	usercodeFile, _ := os.Open("cafecoderUsers/" + submit.directoryName + "/" + submit.directoryName)
 	content, err := ioutil.ReadAll(usercodeFile)
@@ -588,7 +607,7 @@ func executeJudge(csv []string, tftpCli **tftp.Client, commandChickets *map[stri
 		&buf, types.CopyToContainerOptions{},
 	)
 	usercodeFile.Close()
-	//
+	println("checked")
 	ret := compile(&submit, &sessionIDChan)
 	if ret == -1 {
 		//fmtWriter(submit.resultBuffer, "%s,-1,undef,%s,0,", submit.sessionID, result[6])
