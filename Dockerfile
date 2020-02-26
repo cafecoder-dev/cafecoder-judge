@@ -14,6 +14,8 @@ apt install g++ -y  && \
 apt install default-jdk -y && \
 apt install python3 -y && \
 apt install apt-transport-https dirmngr -y && \
+tar -C /usr/local -xzf go$VERSION.$OS-$ARCH.tar.gz && \
+export PATH=$PATH:/usr/local/go/bin && \
 useradd -m rbash_user && \
 mkdir cafecoderUsers && \
 chown rbash_user:rbash_user cafecoderUsers
