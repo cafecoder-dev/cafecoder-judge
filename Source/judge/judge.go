@@ -71,10 +71,13 @@ type submitT struct {
 	testcaseDirPath string
 	score           int
 
+	compileCmd   string
+	executeCmd   string
+	execDirPath  string
+	execFilePath string
+
 	directoryName string
 
-	execDirPath        string
-	execFilePath       string
 	testcaseN          int
 	testcaseName       [100]string
 	testcaseTime       [100]int64
@@ -162,6 +165,38 @@ func manageCommands(commandChickets *commandChicket) {
 	}
 }
 
+func langConfig(submit *submitT) {
+	submit.execDirPath = "/cafecoderUsers/" + submit.directoryName
+	switch submit.lang {
+	case 0: //C11
+		submit.compileCmd = "gcc" + " /cafecoderUsers/" + submit.directoryName + "/Main.c" + " -O2 " + " -lm" + " -std=gnu11" + " -o" + " /cafecoderUsers/" + submit.directoryName + "/Main.out"
+		submit.execFilePath = "/cafecoderUsers/" + submit.directoryName + "/Main.out"
+		submit.executeCmd = "./cafecoderUsers/" + submit.directoryName + "/Main.out"
+	case 1: //C++17
+		submit.compileCmd = "g++" + " /cafecoderUsers/" + submit.directoryName + "/Main.cpp" + " -O2 " + " -lm" + " -std=gnu++17" + " -o" + " /cafecoderUsers/" + submit.directoryName + "/Main.out"
+		submit.execFilePath = "/cafecoderUsers/" + submit.directoryName + "/Main.out"
+		submit.executeCmd = "./cafecoderUsers/" + submit.directoryName + "/Main.out"
+	case 2: //java8
+		submit.compileCmd = "javac" + " /cafecoderUsers/" + submit.directoryName + "/Main.java" + " -d" + " /cafecoderUsers/" + submit.directoryName
+		submit.execFilePath = "/cafecoderUsers/" + submit.directoryName + "/Main.class"
+		submit.executeCmd = "java" + " -cp" + " /cafecoderUsers/" + submit.directoryName + " Main"
+	case 3: //python3
+		submit.compileCmd = "python3" + " -m" + " py_compile" + " /cafecoderUsers/" + submit.directoryName + "/Main.py"
+		submit.execFilePath = "/cafecoderUsers/" + submit.directoryName + "/Main.py"
+		submit.executeCmd = "python3 /cafecoderUsers/" + submit.directoryName + "/Main.py"
+	case 4: //C#
+		submit.compileCmd = "mcs" + " /cafecoderUsers/" + submit.directoryName + "/Main.cs" + " -out:/cafecoderUsers/" + submit.directoryName + "/Main.exe"
+		submit.execFilePath = "/cafecoderUsers/" + submit.directoryName + "/Main.exe"
+		submit.executeCmd = "mono /cafecoderUsers/" + submit.directoryName + "/Main.exe"
+	case 5: //golang
+		submit.compileCmd = "go build " + submit.directoryName + " /Main.go -o " + "/cafecoderUsers/" + submit.directoryName + "/Main.out"
+		submit.execFilePath = "/cafecoderUsers/" + submit.directoryName + "/Main.out"
+		submit.executeCmd = "./cafecoderUsers/" + submit.directoryName + "/Main.out"
+	
+	}
+
+}
+
 func compile(submit *submitT, sessionIDChan *chan cmdResultJSON) int {
 	var (
 		err      error
@@ -174,30 +209,7 @@ func compile(submit *submitT, sessionIDChan *chan cmdResultJSON) int {
 	}
 
 	requests.SessionID = submit.sessionID
-	submit.execDirPath = "/cafecoderUsers/" + submit.directoryName
-	switch submit.lang {
-	case 0: //C11
-		requests.Command = "gcc" + " /cafecoderUsers/" + submit.directoryName + "/Main.c" + " -lm" + " -std=gnu11" + " -o" + " /cafecoderUsers/" + submit.directoryName + "/Main.out"
-		submit.execFilePath = "/cafecoderUsers/" + submit.directoryName + "/Main.out"
-	case 1: //C++17
-		requests.Command = "g++" + " /cafecoderUsers/" + submit.directoryName + "/Main.cpp" + " -lm" + " -std=gnu++17" + " -o" + " /cafecoderUsers/" + submit.directoryName + "/Main.out"
-		submit.execFilePath = "/cafecoderUsers/" + submit.directoryName + "/Main.out"
-	case 2: //java8
-		requests.Command = "javac" + " /cafecoderUsers/" + submit.directoryName + "/Main.java" + " -d" + " /cafecoderUsers/" + submit.directoryName
-		submit.execFilePath = "/cafecoderUsers/" + submit.directoryName + "/Main.class"
-	case 3: //python3
-		requests.Command = "python3" + " -m" + " py_compile" + " /cafecoderUsers/" + submit.directoryName + "/Main.py"
-		submit.execFilePath = "/cafecoderUsers/" + submit.directoryName + "/Main.py"
-	case 4: //C#
-		requests.Command = "mcs" + " /cafecoderUsers/" + submit.directoryName + "/Main.cs" + " -out:/cafecoderUsers/" + submit.directoryName + "/Main.exe"
-		submit.execFilePath = "/cafecoderUsers/" + submit.directoryName + "/Main.exe"
-	case 5: //Ruby
-		requests.Command = "ruby" + " -cw" + " /cafecoderUsers/" + submit.directoryName + "/Main.rb"
-		submit.execFilePath = "/cafecoderUsers/" + submit.directoryName + "/Main.rb"
-	}
 
-	//I couldn't solve a problem in syntax-chack python3 code.
-	//Please teach me how to solve this problem:(
 	if submit.lang != 5 {
 		fmt.Println("go compile")
 		b, _ := json.Marshal(requests)
@@ -302,20 +314,7 @@ func tryTestcase(submit *submitT, sessionIDChan *chan cmdResultJSON, overAllResu
 			fmtWriter(submit.errorBuffer, "298.readfile error : %s\n", err)
 			return -1
 		}
-		switch submit.lang {
-		case 0: //C11
-			requests.Command = "./cafecoderUsers/" + submit.directoryName + "/Main.out"
-		case 1: //C++
-			requests.Command = "./cafecoderUsers/" + submit.directoryName + "/Main.out"
-		case 2: //java8
-			requests.Command = "java" + " -cp" + " /cafecoderUsers/" + submit.directoryName + " Main"
-		case 3: //python3
-			requests.Command = "python3 /cafecoderUsers/" + submit.directoryName + "/Main.py"
-		case 4: //C#
-			requests.Command = "mono /cafecoderUsers/" + submit.directoryName + "/Main.exe"
-		case 5: //Ruby
-			requests.Command = "./cafecoderUsers/" + submit.directoryName + "/Main.out"
-		}
+
 		requests.Mode = "judge"
 		requests.DirectoryName = submit.directoryName
 		b, _ := json.Marshal(requests)
@@ -503,6 +502,8 @@ func executeJudge(csv []string, tftpCli **tftp.Client, commandChickets *map[stri
 	defer func() { delete((*commandChickets), submit.sessionID) }()
 	hash := sha256.Sum256([]byte(submit.sessionID))
 	submit.directoryName = hex.EncodeToString(hash[:])
+
+	langConfig(&submit)
 
 	//println(submit.usercodePath)
 
