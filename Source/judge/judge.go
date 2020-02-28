@@ -49,12 +49,12 @@ type cmdResultJSON struct {
 }
 
 type overAllResultJSON struct {
-	SessionID     string         `json:"sessionID"`
-	OverAllTime   int64          `json:"time"`
-	OverAllResult string         `json:"result"`
-	OverAllScore  int            `json:"score"`
-	ErrMessage    string         `json:"errMessage"`
-	Testcases     []testcaseJSON `json:"testcases"`
+	SessionID  string         `json:"sessionID"`
+	Time       int64          `json:"time"`
+	Result     string         `json:"result"`
+	Score      int            `json:"score"`
+	ErrMessage string         `json:"errMessage"`
+	Testcases  []testcaseJSON `json:"testcases"`
 }
 
 type testcaseJSON struct {
@@ -283,10 +283,10 @@ func tryTestcase(submit *submitT, sessionIDChan *chan cmdResultJSON, overAllResu
 	for i := 0; i < submit.testcaseN; i++ {
 		testcaseName[i] = strings.TrimSpace(testcaseName[i]) //delete \n\r
 		submit.testcaseName[i] = strings.TrimSpace(testcaseName[i])
-		if TLEcase{
-			submit.testcaseResult[i]=7;//-
-			submit.testcaseTime[i]=0;
-			continue;
+		if TLEcase {
+			submit.testcaseResult[i] = 7 //-
+			submit.testcaseTime[i] = 0
+			continue
 		}
 		outputTestcase, err := ioutil.ReadFile(submit.testcaseDirPath + "/out/" + testcaseName[i])
 		if err != nil {
@@ -400,13 +400,13 @@ func tryTestcase(submit *submitT, sessionIDChan *chan cmdResultJSON, overAllResu
 	return 0
 }
 
-func serveResult(overAllResult *overAllResultJSON, submit submitT, errorMessage string) {
+func sendResult(overAllResult *overAllResultJSON, submit submitT, errorMessage string) {
 	var result = []string{"AC", "WA", "TLE", "RE", "MLE", "CE", "IE", "-"}
 	fmt.Println("submit result")
 	overAllResult.SessionID = submit.sessionID
-	overAllResult.OverAllResult = result[submit.overallResult]
-	overAllResult.OverAllTime = submit.overallTime
-	overAllResult.OverAllScore = submit.score
+	overAllResult.Result = result[submit.overallResult]
+	overAllResult.Time = submit.overallTime
+	overAllResult.Score = submit.score
 	testcases := make([]testcaseJSON, 0)
 	for i := 0; i < submit.testcaseN; i++ {
 		var t testcaseJSON
@@ -475,7 +475,7 @@ func executeJudge(csv []string, tftpCli **tftp.Client, commandChickets *map[stri
 		*/
 		println("too many args")
 		submit.overallResult = 6
-		serveResult(&overAllResult, submit, "too many args")
+		sendResult(&overAllResult, submit, "too many args")
 		return
 	}
 	if len(csv) < 6 {
@@ -486,7 +486,7 @@ func executeJudge(csv []string, tftpCli **tftp.Client, commandChickets *map[stri
 		*/
 		submit.overallResult = 6
 		println("too few args")
-		serveResult(&overAllResult, submit, "too few args")
+		sendResult(&overAllResult, submit, "too few args")
 		return
 	}
 
@@ -498,7 +498,7 @@ func executeJudge(csv []string, tftpCli **tftp.Client, commandChickets *map[stri
 			//passResultTCP(submit, BackendHostPort)
 			submit.overallResult = 6
 			println("Inputs are included another characters[0-9],[a-z],[A-Z],'.','/','_'")
-			serveResult(&overAllResult, submit, "Inputs are included another characters[0-9],[a-z],[A-Z],'.','/','_'")
+			sendResult(&overAllResult, submit, "Inputs are included another characters[0-9],[a-z],[A-Z],'.','/','_'")
 			return
 		}
 	}
@@ -534,7 +534,7 @@ func executeJudge(csv []string, tftpCli **tftp.Client, commandChickets *map[stri
 		//passResultTCP(submit, BackendHostPort)
 		submit.overallResult = 6
 		println("container error")
-		serveResult(&overAllResult, submit, err.Error())
+		sendResult(&overAllResult, submit, err.Error())
 		return
 	}
 
@@ -548,7 +548,7 @@ func executeJudge(csv []string, tftpCli **tftp.Client, commandChickets *map[stri
 		//passResultTCP(submit, BackendHostPort)
 		submit.overallResult = 6
 		println(err.Error())
-		serveResult(&overAllResult, submit, err.Error())
+		sendResult(&overAllResult, submit, err.Error())
 		return
 	}
 
@@ -558,7 +558,7 @@ func executeJudge(csv []string, tftpCli **tftp.Client, commandChickets *map[stri
 		//fmtWriter(submit.errorBuffer, "3:%s\n", err)
 		//passResultTCP(submit, BackendHostPort)
 		submit.overallResult = 6
-		serveResult(&overAllResult, submit, err.Error())
+		sendResult(&overAllResult, submit, err.Error())
 		return
 	}
 
@@ -572,7 +572,7 @@ func executeJudge(csv []string, tftpCli **tftp.Client, commandChickets *map[stri
 		//fmtWriter(submit.errorBuffer, "%s\n", err)
 		//passResultTCP(submit, BackendHostPort)
 		submit.overallResult = 6
-		serveResult(&overAllResult, submit, err.Error())
+		sendResult(&overAllResult, submit, err.Error())
 		return
 	}
 
@@ -584,7 +584,7 @@ func executeJudge(csv []string, tftpCli **tftp.Client, commandChickets *map[stri
 		//fmtWriter(submit.errorBuffer, "%s\n", err)
 		//passResultTCP(submit, BackendHostPort)
 		submit.overallResult = 6
-		serveResult(&overAllResult, submit, err.Error())
+		sendResult(&overAllResult, submit, err.Error())
 		return
 	}
 	println(string(b))
@@ -622,13 +622,13 @@ func executeJudge(csv []string, tftpCli **tftp.Client, commandChickets *map[stri
 		//fmtWriter(submit.resultBuffer, "%s,-1,undef,%s,0,", submit.sessionID, result[6])
 		//passResultTCP(submit, BackendHostPort)
 		submit.overallResult = 6
-		serveResult(&overAllResult, submit, "")
+		sendResult(&overAllResult, submit, "")
 		return
 	} else if ret == -2 {
 		//fmtWriter(submit.resultBuffer, "%s,-1,undef,%s,0,", submit.sessionID, result[5])
 		//passResultTCP(submit, BackendHostPort)
 		submit.overallResult = 5
-		serveResult(&overAllResult, submit, "")
+		sendResult(&overAllResult, submit, "")
 		return
 	}
 
@@ -638,7 +638,7 @@ func executeJudge(csv []string, tftpCli **tftp.Client, commandChickets *map[stri
 		//fmtWriter(submit.resultBuffer, "%s,-1,undef,%s,0,", submit.sessionID, result[6])
 		//passResultTCP(submit, BackendHostPort)
 		submit.overallResult = 6
-		serveResult(&overAllResult, submit, "")
+		sendResult(&overAllResult, submit, "")
 		return
 	}
 	//fmtWriter(submit.resultBuffer, "%s,%d,undef,%s,", submit.sessionID, submit.overallTime, result[submit.overallResult])
@@ -653,7 +653,7 @@ func executeJudge(csv []string, tftpCli **tftp.Client, commandChickets *map[stri
 		}
 		passResultTCP(submit, BackendHostPort)
 	*/
-	serveResult(&overAllResult, submit, "")
+	sendResult(&overAllResult, submit, "")
 	return
 }
 
