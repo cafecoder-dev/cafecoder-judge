@@ -192,7 +192,7 @@ func langConfig(submit *submitT) {
 		submit.compileCmd = "go build " + submit.directoryName + " /Main.go -o " + "/cafecoderUsers/" + submit.directoryName + "/Main.out"
 		submit.execFilePath = "/cafecoderUsers/" + submit.directoryName + "/Main.out"
 		submit.executeCmd = "./cafecoderUsers/" + submit.directoryName + "/Main.out"
-	
+
 	}
 
 }
@@ -261,7 +261,9 @@ func tryTestcase(submit *submitT, sessionIDChan *chan cmdResultJSON, overAllResu
 		//stderr     bytes.Buffer
 		requests     requestJSON
 		testcaseName [256]string
+		TLEcase      bool
 	)
+	TLEcase = false
 	requests.SessionID = submit.sessionID
 
 	testcaseListFile, err := os.Open(submit.testcaseDirPath + "/testcase_list.txt")
@@ -281,6 +283,11 @@ func tryTestcase(submit *submitT, sessionIDChan *chan cmdResultJSON, overAllResu
 	for i := 0; i < submit.testcaseN; i++ {
 		testcaseName[i] = strings.TrimSpace(testcaseName[i]) //delete \n\r
 		submit.testcaseName[i] = strings.TrimSpace(testcaseName[i])
+		if TLEcase{
+			submit.testcaseResult[i]=7;//-
+			submit.testcaseTime[i]=0;
+			continue;
+		}
 		outputTestcase, err := ioutil.ReadFile(submit.testcaseDirPath + "/out/" + testcaseName[i])
 		if err != nil {
 			fmt.Printf("272.readfile error : %s\n", err)
@@ -380,6 +387,7 @@ func tryTestcase(submit *submitT, sessionIDChan *chan cmdResultJSON, overAllResu
 			}
 		} else {
 			submit.testcaseResult[i] = 2 //TLE
+			TLEcase = true
 		}
 		if submit.testcaseResult[i] > submit.overallResult {
 			submit.overallResult = submit.testcaseResult[i]
@@ -388,11 +396,12 @@ func tryTestcase(submit *submitT, sessionIDChan *chan cmdResultJSON, overAllResu
 		userStderrReader.Close()
 		userStdoutReader.Close()
 	}
+
 	return 0
 }
 
 func serveResult(overAllResult *overAllResultJSON, submit submitT, errorMessage string) {
-	var result = []string{"AC", "WA", "TLE", "RE", "MLE", "CE", "IE"}
+	var result = []string{"AC", "WA", "TLE", "RE", "MLE", "CE", "IE", "-"}
 	fmt.Println("submit result")
 	overAllResult.SessionID = submit.sessionID
 	overAllResult.OverAllResult = result[submit.overallResult]
