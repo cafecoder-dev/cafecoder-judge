@@ -402,6 +402,9 @@ func tryTestcase(submit *submitT, sessionIDChan *chan cmdResultJSON, overAllResu
 
 func sendResult(overAllResult *overAllResultJSON, submit submitT, errorMessage string) {
 	var result = []string{"AC", "WA", "TLE", "RE", "MLE", "CE", "IE", "-"}
+
+	os.RemoveAll("cafecoderUsers/"+submit.directoryName)
+
 	fmt.Println("submit result")
 	overAllResult.SessionID = submit.sessionID
 	overAllResult.Result = result[submit.overallResult]
@@ -455,7 +458,6 @@ func initSubmit(submit *submitT) {
 
 func executeJudge(csv []string, tftpCli **tftp.Client, commandChickets *map[string]chan cmdResultJSON) {
 	var (
-		//result        = []string{"AC", "WA", "TLE", "RE", "MLE", "CE", "IE"}
 		langExtention = [...]string{".c", ".cpp", ".java", ".py", ".cs", ".rb"}
 		submit        = submitT{errorBuffer: new(bytes.Buffer), resultBuffer: new(bytes.Buffer)}
 		err           error
@@ -468,22 +470,12 @@ func executeJudge(csv []string, tftpCli **tftp.Client, commandChickets *map[stri
 		submit.sessionID = csv[1]
 	}
 	if len(csv) > 6 {
-		/*
-			fmtWriter(submit.resultBuffer, "%s,-1,undef,%s,0,", submit.sessionID, result[6])
-			fmtWriter(submit.errorBuffer, "too many args\n")
-			passResultTCP(submit, BackendHostPort)
-		*/
 		println("too many args")
 		submit.overallResult = 6
 		sendResult(&overAllResult, submit, "too many args")
 		return
 	}
 	if len(csv) < 6 {
-		/*
-				fmtWriter(submit.resultBuffer, "%s,-1,undef,%s,0,", submit.sessionID, result[6])
-				fmtWriter(submit.errorBuffer, "too few args\n")
-			passResultTCP(submit, BackendHostPort)
-		*/
 		submit.overallResult = 6
 		println("too few args")
 		sendResult(&overAllResult, submit, "too few args")
@@ -493,9 +485,6 @@ func executeJudge(csv []string, tftpCli **tftp.Client, commandChickets *map[stri
 	/*validation checks*/
 	for i := range csv {
 		if !checkRegexp(`[(A-Za-z0-9\./_\/)]*`, strings.TrimSpace(csv[i])) {
-			//fmtWriter(submit.resultBuffer, "%s,-1,undef,%s,0,", submit.sessionID, result[6])
-			//fmtWriter(submit.errorBuffer, "Inputs are included another characters[0-9],[a-z],[A-Z],'.','/','_'\n")
-			//passResultTCP(submit, BackendHostPort)
 			submit.overallResult = 6
 			println("Inputs are included another characters[0-9],[a-z],[A-Z],'.','/','_'")
 			sendResult(&overAllResult, submit, "Inputs are included another characters[0-9],[a-z],[A-Z],'.','/','_'")
@@ -524,7 +513,6 @@ func executeJudge(csv []string, tftpCli **tftp.Client, commandChickets *map[stri
 	file.Write(submit.code)
 	file.Close()
 	//fileCopy("cafecoderUsers/"+submit.sessionID+"/"+submit.sessionID, submit.usercodePath)
-	defer exec.Command("rm", "-r", "cafecoderUsers/*").Run()
 
 	/*--------------------------------about docker--------------------------------*/
 	submit.containerCli, err = client.NewClientWithOpts(client.WithVersion("1.35"))
@@ -635,24 +623,11 @@ func executeJudge(csv []string, tftpCli **tftp.Client, commandChickets *map[stri
 	ret = tryTestcase(&submit, &sessionIDChan, &overAllResult)
 	fmt.Println("test done")
 	if ret == -1 {
-		//fmtWriter(submit.resultBuffer, "%s,-1,undef,%s,0,", submit.sessionID, result[6])
-		//passResultTCP(submit, BackendHostPort)
 		submit.overallResult = 6
 		sendResult(&overAllResult, submit, "")
 		return
 	}
-	//fmtWriter(submit.resultBuffer, "%s,%d,undef,%s,", submit.sessionID, submit.overallTime, result[submit.overallResult])
-	/*
-		if submit.overallResult == 0 {
-			fmtWriter(submit.resultBuffer, "%d,", submit.score)
-		} else {
-			fmtWriter(submit.resultBuffer, "0,")
-		}
-		for i := 0; i < submit.testcaseN; i++ {
-			fmtWriter(submit.resultBuffer, "%s,%d,", result[submit.testcaseResult[i]], submit.testcaseTime[i])
-		}
-		passResultTCP(submit, BackendHostPort)
-	*/
+	
 	sendResult(&overAllResult, submit, "")
 	return
 }
