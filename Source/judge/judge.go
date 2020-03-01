@@ -1,4 +1,4 @@
-package judge
+package main
 
 import (
 	"archive/tar"
@@ -23,13 +23,13 @@ import (
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/client"
 
-	"./tftpwrapper"
 	"pack.ag/tftp"
 )
 
 const (
-	//BackendHostPort ... appear IP-address and port-number
-	BackendHostPort = "133.130.101.250:5963"
+	/*BackendHostPort ... backend's IP-address and port-number*/
+	//BackendHostPort = "133.130.101.250:5963"
+	BackendHostPort = "localhost:5963"
 )
 
 type cmdChicket struct {
@@ -178,6 +178,7 @@ func judge(csv []string, tftpCli **tftp.Client, cmdChickets *map[string]chan cmd
 		fmt.Printf("%s\n", errMessage)
 		submit.result.Result = "IE"
 		sendResult(submit)
+		return
 	}
 
 	submit.usercodePath = csv[2]
@@ -191,7 +192,10 @@ func judge(csv []string, tftpCli **tftp.Client, cmdChickets *map[string]chan cmd
 
 	langConfig(&submit)
 
-	submit.code = tftpwrapper.DownloadFromPath(tftpCli, submit.usercodePath)
+	/*todo: なんとかする*/
+	//submit.code = tftpwrapper.DownloadFromPath(tftpCli, submit.usercodePath)
+	submit.code, _ = ioutil.ReadFile(submit.usercodePath)
+
 	os.Mkdir("cafecoderUsers/"+submit.dirName, 0777)
 	file, _ := os.Create("cafecoderUsers/" + submit.dirName + "/" + submit.dirName)
 	file.Write(submit.code)
@@ -199,17 +203,20 @@ func judge(csv []string, tftpCli **tftp.Client, cmdChickets *map[string]chan cmd
 
 	err := createContainer(&submit)
 	if err != nil {
-		fmt.Printf("%s\n", err.Error())
+		fmt.Printf("container:%s\n", err.Error())
 		submit.result.Result = "IE"
 		sendResult(submit)
+		return
 	}
+	
 	defer removeContainer(submit)
 
-	_, err = requestCmd("mkdir -p cafecoderUsers"+submit.dirName, "other", submit, &sessionIDChan)
+	_, err = requestCmd("mkdir -p cafecoderUsers/"+submit.dirName, "other", submit, &sessionIDChan)
 	if err != nil {
 		fmt.Printf("%s\n", err.Error())
 		submit.result.Result = "IE"
 		sendResult(submit)
+		return
 	}
 
 	err = tarCopy(
@@ -222,21 +229,25 @@ func judge(csv []string, tftpCli **tftp.Client, cmdChickets *map[string]chan cmd
 		fmt.Printf("%s\n", err.Error())
 		submit.result.Result = "IE"
 		sendResult(submit)
+		return
 	}
 
 	err = compile(&submit, &sessionIDChan)
 	if err != nil {
 		submit.result.Result = "IE"
 		sendResult(submit)
+		return
 	}
 	if submit.result.Result == "CE" {
 		sendResult(submit)
+		return
 	}
 
 	err = tryTestcase(&submit, &sessionIDChan)
 	if err != nil {
 		submit.result.Result = "IE"
 		sendResult(submit)
+		return
 	}
 	println("test done")
 
@@ -245,12 +256,14 @@ func judge(csv []string, tftpCli **tftp.Client, cmdChickets *map[string]chan cmd
 }
 
 func compile(submit *submitT, sessionIDchan *chan cmdResultJSON) error {
+	println("check")
 	recv, err := requestCmd(submit.compileCmd, "other", *submit, sessionIDchan)
 	if err != nil {
 		fmt.Printf("%s\n", err.Error())
 		return err
 	}
 	if !recv.Result {
+		fmt.Printf("%s CE\n", recv.ErrMessage)
 		submit.result.Result = "CE"
 		return nil
 	}
@@ -403,7 +416,7 @@ func tarCopy(hostFilePath string, containerFilePath string, mode int64, submit s
 		return err
 	}
 	usercodeFile.Close()
-	fmt.Printf("copy to container done")
+	fmt.Printf("copy to container done\n")
 	return nil
 }
 
@@ -475,7 +488,7 @@ func langConfig(submit *submitT) {
 	submit.execDirPath = "/cafecoderUsers/" + submit.dirName
 	switch submit.lang {
 	case 0: //C11
-		submit.compileCmd = "gcc" + " /cafecoderUsers/" + submit.dirName + "/Main.c" + " -O2 " + " -lm" + " -std=gnu11" + " -o" + " /cafecoderUsers/" + submit.dirName + "/Main.out"
+		submit.compileCmd = "gcc" + " /cafecoderUsers/" + submit.dirName + "/Main.c" + " -O2" + " -lm" + " -std=gnu11" + " -o" + " /cafecoderUsers/" + submit.dirName + "/Main.out"
 		submit.execFilePath = "/cafecoderUsers/" + submit.dirName + "/Main.out"
 		submit.executeCmd = "./cafecoderUsers/" + submit.dirName + "/Main.out"
 		submit.fileName = "Main.c"

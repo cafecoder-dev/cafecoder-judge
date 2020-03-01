@@ -74,6 +74,10 @@ func executeJudge(request requestJSON) {
 
 		start := time.Now().UnixNano()
 		err := cmd.Start()
+		if err != nil {
+			fmt.Println("start exception")
+			cmdResult.ErrMessage += "start exception\n"
+		}
 		done := make(chan error)
 		go func() { done <- cmd.Wait() }()
 		timeout := time.After(2 * time.Second)

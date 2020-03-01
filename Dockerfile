@@ -13,8 +13,6 @@ apt install gcc -y && \
 apt install g++ -y  && \
 apt install default-jdk -y && \
 apt install python3 -y && \
-tar -C /usr/local -xzf go$VERSION.$OS-$ARCH.tar.gz && \
-export PATH=$PATH:/usr/local/go/bin && \
 apt install apt-transport-https dirmngr -y && \
 useradd -m rbash_user && \
 mkdir cafecoderUsers && \
