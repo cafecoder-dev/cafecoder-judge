@@ -12,10 +12,8 @@ import (
 )
 
 const (
-	//OPENPORT ... port-number to reveice from host-server
-	OPENPORT = "0.0.0.0:8887"
-	//HOSTPORT ... port-number to send result to host-server
-	HOSTPORT = "172.17.0.1:3344"
+	ContainerPort = "0.0.0.0:8887"
+	HostPort      = "172.17.0.1:3344"
 )
 
 type cmdResultJSON struct {
@@ -33,7 +31,7 @@ type requestJSON struct {
 }
 
 func main() {
-	listen, err := net.Listen("tcp", OPENPORT) //from backend server
+	listen, err := net.Listen("tcp", ContainerPort) //from backend server
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%s\n", err)
 	}
@@ -42,6 +40,7 @@ func main() {
 		if err != nil {
 			continue //continue to receive request
 		}
+
 		var request requestJSON
 		json.NewDecoder(cnct).Decode(&request)
 		cnct.Close()
@@ -51,27 +50,26 @@ func main() {
 }
 
 func readError(cmdResult *cmdResultJSON, directoryName string) {
-	stderr, err := os.Open("cafecoderUsers/" + directoryName + "/userStderr.txt")
-	defer stderr.Close()
+	stderrFp, err := os.Open("userStderr.txt")
+	defer stderrFp.Close()
 	if err != nil {
 		cmdResult.ErrMessage = err.Error()
 	}
 	buf := make([]byte, 65536)
-	buf, err = ioutil.ReadAll(stderr)
+	buf, err = ioutil.ReadAll(stderrFp)
 	if err != nil {
 		cmdResult.ErrMessage = err.Error()
 		return
 	}
 	cmdResult.ErrMessage = base64.StdEncoding.EncodeToString(buf)
+	//cmdResult.ErrMessage = string(buf[:n])
 }
 
 func executeJudge(request requestJSON) {
 	var cmdResult cmdResultJSON
 	cmdResult.SessionID = request.SessionID
 	if request.Mode == "judge" {
-		os.Mkdir("cafecoderUsers/"+request.DirName, 0777)
-		cmd := exec.Command("sh", "-c", request.Cmd+"< cafecoderUsers/"+request.DirName+"/testcase.txt > cafecoderUsers/"+request.DirName+"/userStdout.txt"+" 2> cafecoderUsers/"+request.DirName+"/userStderr.txt")
-
+		cmd := exec.Command("sh", "-c", request.Cmd+" < testcase.txt > userStdout.txt 2> userStderr.txt")
 		start := time.Now().UnixNano()
 		err := cmd.Start()
 		if err != nil {
@@ -83,9 +81,15 @@ func executeJudge(request requestJSON) {
 		timeout := time.After(2 * time.Second)
 		select {
 		case <-timeout:
-			/*Timeout happened first, kill the process and print a message.*/
+			// Timeout happened first, kill the process and print a message.
 			cmd.Process.Kill()
 			fmt.Println("Command timed out")
+			cmdResult.ErrMessage += "Command timed out\n"
+		case err := <-done:
+			if err != nil {
+				fmt.Println("exception")
+				cmdResult.ErrMessage += "exception\n"
+			}
 		}
 		end := time.Now().UnixNano()
 		cmdResult.Time = (end - start) / int64(time.Millisecond)
@@ -98,17 +102,18 @@ func executeJudge(request requestJSON) {
 		readError(&cmdResult, request.DirName)
 
 	} else {
-		os.Mkdir("cafecoderUsers/"+request.DirName, 0777)
-		err := exec.Command("sh", "-c", request.Cmd).Run()
+		err := exec.Command("sh", "-c", request.Cmd+" > userStdout.txt 2> userStderr.txt").Run()
 		if err != nil {
 			cmdResult.Result = false
 
 		} else {
 			cmdResult.Result = true
 		}
+
+		readError(&cmdResult, request.DirName)
 	}
 
-	conn, err := net.Dial("tcp", HOSTPORT)
+	conn, err := net.Dial("tcp", HostPort)
 	b, err := json.Marshal(cmdResult)
 	if err != nil {
 		conn.Write([]byte("err marshal"))

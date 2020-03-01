@@ -30,6 +30,7 @@ const (
 	/*BackendHostPort ... backend's IP-address and port-number*/
 	//BackendHostPort = "133.130.101.250:5963"
 	BackendHostPort = "localhost:5963"
+	maxTestcaseN    = 50
 )
 
 type cmdChicket struct {
@@ -52,13 +53,13 @@ type requestJSON struct {
 }
 
 type resultJSON struct {
-	SessionID  string         `json:"sessionID"`
-	Time       int64          `json:"time"`
-	Result     string         `json:"result"`
-	Score      int            `json:"score"`
-	ErrMessage string         `json:"errMessage"`
-	TestcaseN  int            `json:"testcaseN"` //
-	Testcases  []testcaseJSON `json:"testcases"`
+	SessionID  string                     `json:"sessionID"`
+	Time       int64                      `json:"time"`
+	Result     string                     `json:"result"`
+	Score      int                        `json:"score"`
+	ErrMessage string                     `json:"errMessage"`
+	TestcaseN  int                        `json:"testcaseN"` //
+	Testcases  [maxTestcaseN]testcaseJSON `json:"testcases"`
 }
 
 type testcaseJSON struct {
@@ -130,8 +131,8 @@ func manageCmds(cmdChickets *cmdChicket) {
 			json.NewDecoder(cnct).Decode(&cmdResult)
 			cnct.Close()
 			println("connection closed")
-			fmt.Println(cmdResult)
 			data, _ := base64.StdEncoding.DecodeString(cmdResult.ErrMessage)
+			fmt.Println(string(data))
 			cmdResult.ErrMessage = string(data)
 			go func() {
 				(*cmdChickets).channel[cmdResult.SessionID] <- cmdResult
@@ -208,20 +209,11 @@ func judge(csv []string, tftpCli **tftp.Client, cmdChickets *map[string]chan cmd
 		sendResult(submit)
 		return
 	}
-	
 	defer removeContainer(submit)
-
-	_, err = requestCmd("mkdir -p cafecoderUsers/"+submit.dirName, "other", submit, &sessionIDChan)
-	if err != nil {
-		fmt.Printf("%s\n", err.Error())
-		submit.result.Result = "IE"
-		sendResult(submit)
-		return
-	}
 
 	err = tarCopy(
 		"cafecoderUsers/"+submit.dirName+"/"+submit.dirName,
-		"cafecoderUsers/"+submit.dirName+"/"+submit.fileName,
+		submit.fileName,
 		0777,
 		submit,
 	)
@@ -269,13 +261,14 @@ func compile(submit *submitT, sessionIDchan *chan cmdResultJSON) error {
 	}
 	println("compile done")
 
-	recv, err = requestCmd("chown rbash_user "+submit.execFilePath, "other", *submit, sessionIDchan)
-	if err != nil {
-		fmt.Printf("%s\n", err.Error())
-		return err
-	}
-	println("chown done")
-
+	/*
+		recv, err = requestCmd("chown rbash_user "+submit.fileName, "other", *submit, sessionIDchan)
+		if err != nil {
+			fmt.Printf("%s\n", err.Error())
+			return err
+		}
+		println("chown done")
+	*/
 	return nil
 }
 
@@ -296,6 +289,7 @@ func tryTestcase(submit *submitT, sessionIDChan *chan cmdResultJSON) error {
 	}
 	testcaseListFile.Close()
 
+	fmt.Printf("N=%d\n", submit.result.TestcaseN)
 	for i := 0; i < submit.result.TestcaseN; i++ {
 		if TLEcase {
 			submit.result.Testcases[i].Result = "-"
@@ -309,7 +303,7 @@ func tryTestcase(submit *submitT, sessionIDChan *chan cmdResultJSON) error {
 		}
 		err = tarCopy(
 			submit.testcaseDirPath+"/in/"+testcaseName,
-			"/cafecoderUsers/"+submit.dirName+"/testcase.txt",
+			"/testcase.txt",
 			0744,
 			*submit,
 		)
@@ -323,16 +317,15 @@ func tryTestcase(submit *submitT, sessionIDChan *chan cmdResultJSON) error {
 			println("requestCmd error")
 			return err
 		}
-		fmt.Println(recv)
 
-		stdoutBuf, err := copyFromContainer("cafecoderUsers/"+submit.dirName+"/userStdout.txt", *submit)
+		stdoutBuf, err := copyFromContainer("userStdout.txt", *submit)
 		if err != nil {
-			println("cp error")
+			println(err.Error())
 			return err
 		}
-		stderrBuf, err := copyFromContainer("cafecoderUsers/"+submit.dirName+"/userStderr.txt", *submit)
+		stderrBuf, err := copyFromContainer("userStderr.txt", *submit)
 		if err != nil {
-			println("cp error")
+			println(err.Error())
 			return err
 		}
 
@@ -373,10 +366,10 @@ func copyFromContainer(filepath string, submit submitT) (*bytes.Buffer, error) {
 		submit.sessionID,
 		filepath,
 	)
-	defer reader.Close()
 	if err != nil {
 		return buffer, err
 	}
+	defer reader.Close()
 	tr := tar.NewReader(reader)
 	tr.Next()
 	buffer = new(bytes.Buffer)
@@ -437,15 +430,17 @@ func requestCmd(cmd string, mode string, submit submitT, sessionIDChan *chan cmd
 	if err != nil {
 		return recv, err
 	}
-	println(string(b))
+	fmt.Println(request)
+
 	containerConn.Write(b)
 	containerConn.Close()
 	for {
-		recv := <-*sessionIDChan
+		recv = <-*sessionIDChan
 		if recv.SessionID == submit.sessionID {
 			break
 		}
 	}
+	fmt.Println(recv)
 	return recv, nil
 }
 
@@ -485,37 +480,30 @@ func createContainer(submit *submitT) error {
 }
 
 func langConfig(submit *submitT) {
-	submit.execDirPath = "/cafecoderUsers/" + submit.dirName
 	switch submit.lang {
 	case 0: //C11
-		submit.compileCmd = "gcc" + " /cafecoderUsers/" + submit.dirName + "/Main.c" + " -O2" + " -lm" + " -std=gnu11" + " -o" + " /cafecoderUsers/" + submit.dirName + "/Main.out"
-		submit.execFilePath = "/cafecoderUsers/" + submit.dirName + "/Main.out"
-		submit.executeCmd = "./cafecoderUsers/" + submit.dirName + "/Main.out"
+		submit.compileCmd = "gcc Main.c -O2 -lm -std=gnu11 -o Main.out"
+		submit.executeCmd = "./Main.out"
 		submit.fileName = "Main.c"
 	case 1: //C++17
-		submit.compileCmd = "g++" + " /cafecoderUsers/" + submit.dirName + "/Main.cpp" + " -O2 " + " -lm" + " -std=gnu++17" + " -o" + " /cafecoderUsers/" + submit.dirName + "/Main.out"
-		submit.execFilePath = "/cafecoderUsers/" + submit.dirName + "/Main.out"
-		submit.executeCmd = "./cafecoderUsers/" + submit.dirName + "/Main.out"
+		submit.compileCmd = "g++ Main.cpp -O2 -lm -std=gnu++17 -o Main.out"
+		submit.executeCmd = "./Main.out"
 		submit.fileName = "Main.cpp"
 	case 2: //java8
-		submit.compileCmd = "javac" + " /cafecoderUsers/" + submit.dirName + "/Main.java" + " -d" + " /cafecoderUsers/" + submit.dirName
-		submit.execFilePath = "/cafecoderUsers/" + submit.dirName + "/Main.class"
-		submit.executeCmd = "java" + " -cp" + " /cafecoderUsers/" + submit.dirName + " Main"
+		submit.compileCmd = "javac Main.java"
+		submit.executeCmd = "java Main"
 		submit.fileName = "Main.java"
 	case 3: //python3
-		submit.compileCmd = "python3" + " -m" + " py_compile" + " /cafecoderUsers/" + submit.dirName + "/Main.py"
-		submit.execFilePath = "/cafecoderUsers/" + submit.dirName + "/Main.py"
-		submit.executeCmd = "python3 /cafecoderUsers/" + submit.dirName + "/Main.py"
+		submit.compileCmd = "python3 -m py_compile Main.py"
+		submit.executeCmd = "python3 Main.py"
 		submit.fileName = "Main.py"
 	case 4: //C#
-		submit.compileCmd = "mcs" + " /cafecoderUsers/" + submit.dirName + "/Main.cs" + " -out:/cafecoderUsers/" + submit.dirName + "/Main.exe"
-		submit.execFilePath = "/cafecoderUsers/" + submit.dirName + "/Main.exe"
-		submit.executeCmd = "mono /cafecoderUsers/" + submit.dirName + "/Main.exe"
+		submit.compileCmd = "mcs Main.cs -out:Main.exe"
+		submit.executeCmd = "mono Main.exe"
 		submit.fileName = "Main.cs"
 	case 5: //golang
-		submit.compileCmd = "go build " + submit.dirName + " /Main.go -o " + "/cafecoderUsers/" + submit.dirName + "/Main.out"
-		submit.execFilePath = "/cafecoderUsers/" + submit.dirName + "/Main.out"
-		submit.executeCmd = "./cafecoderUsers/" + submit.dirName + "/Main.out"
+		submit.compileCmd = "go build Main.go -o Main.out"
+		submit.executeCmd = ".Main.out"
 		submit.fileName = "Main.go"
 	}
 
