@@ -1,4 +1,4 @@
-package main
+package judge
 
 import (
 	"archive/tar"
@@ -10,21 +10,20 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"net"
 	"os"
-	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
 	"sync"
 
-	"./tftpwrapper"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/client"
+
+	"./tftpwrapper"
 	"pack.ag/tftp"
 )
 
@@ -33,12 +32,9 @@ const (
 	BackendHostPort = "133.130.101.250:5963"
 )
 
-type requestJSON struct {
-	SessionID     string `json:"sessionID"`
-	Command       string `json:"command"`
-	Mode          string `json:"mode"` //Mode ... "judge" or "others"
-	DirectoryName string `json:"directoryName"`
-	//Lang      string `json:"lang"` //Lang ... c11,c++17,java8,python3,c#,ruby
+type cmdChicket struct {
+	sync.Mutex
+	channel map[string]chan cmdResultJSON
 }
 
 type cmdResultJSON struct {
@@ -48,12 +44,20 @@ type cmdResultJSON struct {
 	ErrMessage string `json:"errMessage"`
 }
 
-type overAllResultJSON struct {
+type requestJSON struct {
+	SessionID string `json:"sessionID"`
+	Cmd       string `json:"cmd"`
+	Mode      string `json:"mode"` //Mode ... "judge" or "other"
+	DirName   string `json:"dirName"`
+}
+
+type resultJSON struct {
 	SessionID  string         `json:"sessionID"`
 	Time       int64          `json:"time"`
 	Result     string         `json:"result"`
 	Score      int            `json:"score"`
 	ErrMessage string         `json:"errMessage"`
+	TestcaseN  int            `json:"testcaseN"` //
 	Testcases  []testcaseJSON `json:"testcases"`
 }
 
@@ -66,26 +70,19 @@ type testcaseJSON struct {
 
 type submitT struct {
 	sessionID       string //csv[1]
-	usercodePath    string
-	lang            int
-	testcaseDirPath string
-	score           int
+	usercodePath    string //csv[2]
+	lang            int    //csv[3]
+	testcaseDirPath string //csv[4]
+	score           int    //csv[5]
 
-	compileCmd   string
-	executeCmd   string
+	dirName      string
 	execDirPath  string
 	execFilePath string
+	fileName     string
+	compileCmd   string
+	executeCmd   string
 
-	directoryName string
-
-	testcaseN          int
-	testcaseName       [100]string
-	testcaseTime       [100]int64
-	testcaseResult     [100]int
-	testcaseMemoryUsed [100]int64
-
-	overallTime   int64
-	overallResult int
+	result resultJSON
 
 	code             []byte
 	containerCli     *client.Client
@@ -94,11 +91,6 @@ type submitT struct {
 
 	resultBuffer *bytes.Buffer
 	errorBuffer  *bytes.Buffer
-}
-
-type commandChicket struct {
-	sync.Mutex
-	channel map[string]chan cmdResultJSON
 }
 
 func checkRegexp(reg, str string) bool {
@@ -122,28 +114,12 @@ func passResultTCP(submit submitT, hostAndPort string) {
 	conn.Close()
 }
 
-func containerStopAndRemove(submit submitT) {
-	var err error
-	//timeout := 5 * time.Second
-	err = submit.containerCli.ContainerStop(context.Background(), submit.containerID, nil)
-	if err != nil {
-		fmtWriter(submit.errorBuffer, "4:%s\n", err)
-	}
-	err = submit.containerCli.ContainerRemove(context.Background(), submit.containerID, types.ContainerRemoveOptions{RemoveVolumes: true, RemoveLinks: true, Force: true})
-	if err != nil {
-		fmtWriter(submit.errorBuffer, "5:%s\n", err)
-	}
-	labelFilters := filters.NewArgs()
-	submit.containerCli.ContainersPrune(context.Background(), labelFilters)
-	fmt.Println("container " + submit.sessionID + " removed")
-
-}
-
-func manageCommands(commandChickets *commandChicket) {
+func manageCmds(cmdChickets *cmdChicket) {
 	listen, err := net.Listen("tcp", "0.0.0.0:3344")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%s\n", err)
 	}
+
 	for {
 		cnct, err := listen.Accept()
 		if err != nil {
@@ -158,483 +134,398 @@ func manageCommands(commandChickets *commandChicket) {
 			data, _ := base64.StdEncoding.DecodeString(cmdResult.ErrMessage)
 			cmdResult.ErrMessage = string(data)
 			go func() {
-				(*commandChickets).channel[cmdResult.SessionID] <- cmdResult
+				(*cmdChickets).channel[cmdResult.SessionID] <- cmdResult
 			}()
-
 		}()
 	}
 }
 
-func langConfig(submit *submitT) {
-	submit.execDirPath = "/cafecoderUsers/" + submit.directoryName
-	switch submit.lang {
-	case 0: //C11
-		submit.compileCmd = "gcc" + " /cafecoderUsers/" + submit.directoryName + "/Main.c" + " -O2 " + " -lm" + " -std=gnu11" + " -o" + " /cafecoderUsers/" + submit.directoryName + "/Main.out"
-		submit.execFilePath = "/cafecoderUsers/" + submit.directoryName + "/Main.out"
-		submit.executeCmd = "./cafecoderUsers/" + submit.directoryName + "/Main.out"
-	case 1: //C++17
-		submit.compileCmd = "g++" + " /cafecoderUsers/" + submit.directoryName + "/Main.cpp" + " -O2 " + " -lm" + " -std=gnu++17" + " -o" + " /cafecoderUsers/" + submit.directoryName + "/Main.out"
-		submit.execFilePath = "/cafecoderUsers/" + submit.directoryName + "/Main.out"
-		submit.executeCmd = "./cafecoderUsers/" + submit.directoryName + "/Main.out"
-	case 2: //java8
-		submit.compileCmd = "javac" + " /cafecoderUsers/" + submit.directoryName + "/Main.java" + " -d" + " /cafecoderUsers/" + submit.directoryName
-		submit.execFilePath = "/cafecoderUsers/" + submit.directoryName + "/Main.class"
-		submit.executeCmd = "java" + " -cp" + " /cafecoderUsers/" + submit.directoryName + " Main"
-	case 3: //python3
-		submit.compileCmd = "python3" + " -m" + " py_compile" + " /cafecoderUsers/" + submit.directoryName + "/Main.py"
-		submit.execFilePath = "/cafecoderUsers/" + submit.directoryName + "/Main.py"
-		submit.executeCmd = "python3 /cafecoderUsers/" + submit.directoryName + "/Main.py"
-	case 4: //C#
-		submit.compileCmd = "mcs" + " /cafecoderUsers/" + submit.directoryName + "/Main.cs" + " -out:/cafecoderUsers/" + submit.directoryName + "/Main.exe"
-		submit.execFilePath = "/cafecoderUsers/" + submit.directoryName + "/Main.exe"
-		submit.executeCmd = "mono /cafecoderUsers/" + submit.directoryName + "/Main.exe"
-	case 5: //golang
-		submit.compileCmd = "go build " + submit.directoryName + " /Main.go -o " + "/cafecoderUsers/" + submit.directoryName + "/Main.out"
-		submit.execFilePath = "/cafecoderUsers/" + submit.directoryName + "/Main.out"
-		submit.executeCmd = "./cafecoderUsers/" + submit.directoryName + "/Main.out"
+func sendResult(submit submitT) {
+	priorityMap := map[string]int{"AC": 0, "WA": 1, "-": 2, "TLE": 3, "RE": 4, "MLE": 5, "CE": 6, "IE": 7}
 
-	}
-
-}
-
-func compile(submit *submitT, sessionIDChan *chan cmdResultJSON) int {
-	var (
-		err      error
-		requests requestJSON
-	)
-	containerConn, err := net.Dial("tcp", submit.containerInspect.NetworkSettings.IPAddress+":8887")
-	if err != nil {
-		fmtWriter(submit.errorBuffer, "%s\n", err)
-		return -2
-	}
-
-	requests.SessionID = submit.sessionID
-
-	if submit.lang != 5 {
-		fmt.Println("go compile")
-		b, _ := json.Marshal(requests)
-		containerConn.Write(b)
-		if err != nil {
-			fmtWriter(submit.errorBuffer, "%s", err)
-			return -2
-		}
-		containerConn.Close()
-		fmt.Println("wait for compile...")
-		for {
-			recv := <-*sessionIDChan
-			if submit.sessionID == recv.SessionID {
-				fmtWriter(submit.errorBuffer, "%s\n", recv.ErrMessage)
-				if !recv.Result {
-					//CE
-					return -2
-				}
-				break
-			}
-		}
-		fmt.Println("compile done")
-	}
-
-	containerConn, err = net.Dial("tcp", submit.containerInspect.NetworkSettings.IPAddress+":8887")
-	defer containerConn.Close()
-	if err != nil {
-		fmtWriter(submit.errorBuffer, "%s\n", err)
-		return -2
-	}
-	requests.Command = "chown rbash_user " + submit.execFilePath
-	b, _ := json.Marshal(requests)
-	containerConn.Write(b)
-	containerConn.Close()
-	for {
-		fmt.Println("wating for chwon")
-		recv := <-*sessionIDChan
-		if submit.sessionID == recv.SessionID {
-			fmtWriter(submit.errorBuffer, "%s\n", recv.ErrMessage)
-			break
-		}
-	}
-
-	return 0
-}
-
-func tryTestcase(submit *submitT, sessionIDChan *chan cmdResultJSON, overAllResult *overAllResultJSON) int {
-	var (
-		//stderr     bytes.Buffer
-		requests     requestJSON
-		testcaseName [256]string
-		TLEcase      bool
-	)
-	TLEcase = false
-	requests.SessionID = submit.sessionID
-
-	testcaseListFile, err := os.Open(submit.testcaseDirPath + "/testcase_list.txt")
-	if err != nil {
-		fmtWriter(submit.errorBuffer, "failed to open"+submit.testcaseDirPath+"/testcase_list.txt\n")
-		return -1
-	}
-
-	scanner := bufio.NewScanner(testcaseListFile)
-	for scanner.Scan() {
-		testcaseName[submit.testcaseN] = scanner.Text()
-		submit.testcaseN++
-	}
-	testcaseListFile.Close()
-	fmt.Printf("N = %d", submit.testcaseN)
-
-	for i := 0; i < submit.testcaseN; i++ {
-		testcaseName[i] = strings.TrimSpace(testcaseName[i]) //delete \n\r
-		submit.testcaseName[i] = strings.TrimSpace(testcaseName[i])
-		if TLEcase {
-			submit.testcaseResult[i] = 7 //-
-			submit.testcaseTime[i] = 0
-			continue
-		}
-		outputTestcase, err := ioutil.ReadFile(submit.testcaseDirPath + "/out/" + testcaseName[i])
-		if err != nil {
-			fmt.Printf("272.readfile error : %s\n", err)
-			fmtWriter(submit.errorBuffer, "272.readfile error : %s\n", err)
-			return -1
-		}
-
-		//tar copy
-		testcaseFile, _ := os.Open(submit.testcaseDirPath + "/in/" + testcaseName[i])
-		content, err := ioutil.ReadAll(testcaseFile)
-		var buf bytes.Buffer
-		tw := tar.NewWriter(&buf)
-		_ = tw.WriteHeader(&tar.Header{
-			Name: "/cafecoderUsers/" + submit.directoryName + "/testcase.txt", // filename
-			Mode: 0744,                                                        // permissions
-			Size: int64(len(content)),                                         // filesize
-		})
-		tw.Write(content)
-		tw.Close()
-		submit.containerCli.CopyToContainer(
-			context.TODO(),
-			submit.containerID,
-			"/",
-			&buf, types.CopyToContainerOptions{},
-		)
-		testcaseFile.Close()
-
-		containerConn, err := net.Dial("tcp", submit.containerInspect.NetworkSettings.IPAddress+":8887")
-		if err != nil {
-			fmt.Printf("298.readfile error : %s\n", err)
-			fmtWriter(submit.errorBuffer, "298.readfile error : %s\n", err)
-			return -1
-		}
-
-		requests.Mode = "judge"
-		requests.DirectoryName = submit.directoryName
-		b, _ := json.Marshal(requests)
-		containerConn.Write(b)
-		containerConn.Close()
-		fmt.Println("wait for testcase...")
-		var recv cmdResultJSON
-		for {
-			recv = <-*sessionIDChan
-			if submit.sessionID == recv.SessionID {
-				break
-			}
-		}
-		fmt.Println(recv)
-
-		userStdoutReader, _, err := submit.containerCli.CopyFromContainer(context.TODO(), submit.sessionID, "cafecoderUsers/"+submit.directoryName+"/userStdout.txt")
-		if err != nil {
-			fmt.Printf("330.cp error :%s\n", err)
-			fmtWriter(submit.errorBuffer, "330.cp error :%s\n", err)
-			return -1
-		}
-		tr := tar.NewReader(userStdoutReader)
-		tr.Next()
-		userStdout := new(bytes.Buffer)
-		userStdout.ReadFrom(tr)
-
-		userStderrReader, _, err := submit.containerCli.CopyFromContainer(context.TODO(), submit.sessionID, "cafecoderUsers/"+submit.directoryName+"/userStderr.txt")
-		if err != nil {
-			fmt.Printf("340.cp error :%s\n", err)
-			fmtWriter(submit.errorBuffer, "340.cp error :%s\n", err)
-			return -1
-		}
-		tr = tar.NewReader(userStderrReader)
-		tr.Next()
-		userStderr := new(bytes.Buffer)
-		userStderr.ReadFrom(tr)
-		fmt.Println("time")
-		submit.testcaseTime[i] = recv.Time
-		fmt.Println(submit.testcaseTime[i])
-		if submit.overallTime < submit.testcaseTime[i] {
-			submit.overallTime = submit.testcaseTime[i]
-		}
-
-		userStdoutLines := strings.Split(userStdout.String(), "\n")
-		userStderrLines := strings.Split(userStderr.String(), "\n")
-		outputTestcaseLines := strings.Split(string(outputTestcase), "\n")
-
-		if submit.testcaseTime[i] <= 2000 {
-			if userStderr.String() != "" && !recv.Result {
-				for j := 0; j < len(userStderrLines); j++ {
-					fmtWriter(submit.errorBuffer, "%s\n", userStderrLines[j])
-				}
-				submit.testcaseResult[i] = 3 //RE
-			} else {
-				submit.testcaseResult[i] = 1 //WA
-				for j := 0; j < len(userStdoutLines) && j < len(outputTestcaseLines); j++ {
-					submit.testcaseResult[i] = 0 //AC
-					if strings.TrimSpace(string(userStdoutLines[j])) != strings.TrimSpace(string(outputTestcaseLines[j])) {
-						submit.testcaseResult[i] = 1 //WA
-						break
-					}
-				}
-			}
-		} else {
-			submit.testcaseResult[i] = 2 //TLE
-			TLEcase = true
-		}
-		if submit.testcaseResult[i] > submit.overallResult {
-			submit.overallResult = submit.testcaseResult[i]
-		}
-
-		userStderrReader.Close()
-		userStdoutReader.Close()
-	}
-
-	return 0
-}
-
-func sendResult(overAllResult *overAllResultJSON, submit submitT, errorMessage string) {
-	var result = []string{"AC", "WA", "TLE", "RE", "MLE", "CE", "IE", "-"}
-
-	os.RemoveAll("cafecoderUsers/"+submit.directoryName)
-
+	os.RemoveAll("cafecoderUsers/" + submit.dirName)
 	fmt.Println("submit result")
-	overAllResult.SessionID = submit.sessionID
-	overAllResult.Result = result[submit.overallResult]
-	overAllResult.Time = submit.overallTime
-	overAllResult.Score = submit.score
-	testcases := make([]testcaseJSON, 0)
-	for i := 0; i < submit.testcaseN; i++ {
-		var t testcaseJSON
-		t.Name = submit.testcaseName[i]
-		t.Result = result[submit.testcaseResult[i]]
-		t.Time = submit.testcaseTime[i]
-		t.MemoryUsed = submit.testcaseMemoryUsed[i]
-		testcases = append(testcases, t)
-	}
-	overAllResult.Testcases = testcases
-	if submit.overallResult == 5 { //output errMessage if result is CE
-		overAllResult.ErrMessage = base64.StdEncoding.EncodeToString([]byte(submit.errorBuffer.String()))
+	submit.result.SessionID = submit.sessionID
+	submit.result.Score = submit.score
+	if priorityMap[submit.result.Result] < 6 {
+		submit.result.Result = "AC"
+		for i := 0; i < submit.result.TestcaseN; i++ {
+			if priorityMap[submit.result.Testcases[i].Result] > priorityMap[submit.result.Result] {
+				submit.result.Testcases[i].Result = submit.result.Result
+			}
+			if submit.result.Testcases[i].Time > submit.result.Time {
+				submit.result.Time = submit.result.Testcases[i].Time
+			}
+		}
 	} else {
-		overAllResult.ErrMessage = ""
+		submit.result.ErrMessage = base64.StdEncoding.EncodeToString([]byte(submit.errorBuffer.String()))
 	}
-	//overAllResult.ErrMessage = submit.errorBuffer.String()
-	b, _ := json.Marshal(*overAllResult)
+
+	b, _ := json.Marshal(submit.result)
 	back := submitT{resultBuffer: new(bytes.Buffer)}
 	fmtWriter(back.resultBuffer, "%s", string(b))
 	fmt.Println("pass TCP")
 	passResultTCP(back, BackendHostPort)
 }
 
-func fileCopy(dstName string, srcName string) {
-	src, err := os.Open(srcName)
-	if err != nil {
-		panic(err)
-	}
-	defer src.Close()
+func judge(csv []string, tftpCli **tftp.Client, cmdChickets *map[string]chan cmdResultJSON) {
+	var submit = submitT{errorBuffer: new(bytes.Buffer), resultBuffer: new(bytes.Buffer)}
 
-	dst, err := os.Create(dstName)
-	if err != nil {
-		panic(err)
-	}
-	defer dst.Close()
+	submit.sessionID = strings.TrimSpace(csv[1])
 
-	_, err = io.Copy(dst, src)
-	if err != nil {
-		panic(err)
-	}
-}
-
-func initSubmit(submit *submitT) {
-	submit.overallTime = -1
-}
-
-func executeJudge(csv []string, tftpCli **tftp.Client, commandChickets *map[string]chan cmdResultJSON) {
-	var (
-		langExtention = [...]string{".c", ".cpp", ".java", ".py", ".cs", ".rb"}
-		submit        = submitT{errorBuffer: new(bytes.Buffer), resultBuffer: new(bytes.Buffer)}
-		err           error
-		overAllResult overAllResultJSON
-	)
-	initSubmit(&submit)
-
-	submit.overallResult = 0
-	if len(csv) > 1 {
-		submit.sessionID = csv[1]
-	}
-	if len(csv) > 6 {
-		println("too many args")
-		submit.overallResult = 6
-		sendResult(&overAllResult, submit, "too many args")
-		return
-	}
-	if len(csv) < 6 {
-		submit.overallResult = 6
-		println("too few args")
-		sendResult(&overAllResult, submit, "too few args")
-		return
-	}
-
-	/*validation checks*/
-	for i := range csv {
-		if !checkRegexp(`[(A-Za-z0-9\./_\/)]*`, strings.TrimSpace(csv[i])) {
-			submit.overallResult = 6
-			println("Inputs are included another characters[0-9],[a-z],[A-Z],'.','/','_'")
-			sendResult(&overAllResult, submit, "Inputs are included another characters[0-9],[a-z],[A-Z],'.','/','_'")
-			return
-		}
+	errMessage := validationCheck(csv)
+	if errMessage != "" {
+		fmt.Printf("%s\n", errMessage)
+		submit.result.Result = "IE"
+		sendResult(submit)
 	}
 
 	submit.usercodePath = csv[2]
 	submit.lang, _ = strconv.Atoi(csv[3])
 	submit.testcaseDirPath = csv[4]
-	submit.score, _ = strconv.Atoi(csv[5])
-	sessionIDChan := (*commandChickets)[submit.sessionID]
-	defer func() { delete((*commandChickets), submit.sessionID) }()
+	submit.score, _ = strconv.Atoi(csv[5]) //don't need...:(
+	sessionIDChan := (*cmdChickets)[submit.sessionID]
+	defer func() { delete((*cmdChickets), submit.sessionID) }()
 	hash := sha256.Sum256([]byte(submit.sessionID))
-	submit.directoryName = hex.EncodeToString(hash[:])
+	submit.dirName = hex.EncodeToString(hash[:])
 
 	langConfig(&submit)
 
-	//println(submit.usercodePath)
-
-	//download file
 	submit.code = tftpwrapper.DownloadFromPath(tftpCli, submit.usercodePath)
-
-	os.Mkdir("cafecoderUsers/"+submit.directoryName, 0777)
-	file, err := os.Create("cafecoderUsers/" + submit.directoryName + "/" + submit.directoryName)
+	os.Mkdir("cafecoderUsers/"+submit.dirName, 0777)
+	file, _ := os.Create("cafecoderUsers/" + submit.dirName + "/" + submit.dirName)
 	file.Write(submit.code)
 	file.Close()
-	//fileCopy("cafecoderUsers/"+submit.sessionID+"/"+submit.sessionID, submit.usercodePath)
 
-	/*--------------------------------about docker--------------------------------*/
-	submit.containerCli, err = client.NewClientWithOpts(client.WithVersion("1.35"))
-	defer submit.containerCli.Close()
+	err := createContainer(&submit)
 	if err != nil {
-		//fmtWriter(submit.errorBuffer, "%s\n", err)
-		//passResultTCP(submit, BackendHostPort)
-		submit.overallResult = 6
-		println("container error")
-		sendResult(&overAllResult, submit, err.Error())
-		return
+		fmt.Printf("%s\n", err.Error())
+		submit.result.Result = "IE"
+		sendResult(submit)
 	}
+	defer removeContainer(submit)
 
-	config := &container.Config{
-
-		Image: "cafecoder",
-	}
-	resp, err := submit.containerCli.ContainerCreate(context.TODO(), config, nil, nil, strings.TrimSpace(submit.sessionID))
+	_, err = requestCmd("mkdir -p cafecoderUsers"+submit.dirName, "other", submit, &sessionIDChan)
 	if err != nil {
-		//fmtWriter(submit.errorBuffer, "2:%s\n", err)
-		//passResultTCP(submit, BackendHostPort)
-		submit.overallResult = 6
-		println(err.Error())
-		sendResult(&overAllResult, submit, err.Error())
-		return
+		fmt.Printf("%s\n", err.Error())
+		submit.result.Result = "IE"
+		sendResult(submit)
 	}
 
-	submit.containerID = resp.ID
-	err = submit.containerCli.ContainerStart(context.TODO(), submit.containerID, types.ContainerStartOptions{})
+	err = tarCopy(
+		"cafecoderUsers/"+submit.dirName+"/"+submit.dirName,
+		"cafecoderUsers/"+submit.dirName+"/"+submit.fileName,
+		0777,
+		submit,
+	)
 	if err != nil {
-		//fmtWriter(submit.errorBuffer, "3:%s\n", err)
-		//passResultTCP(submit, BackendHostPort)
-		submit.overallResult = 6
-		sendResult(&overAllResult, submit, err.Error())
-		return
+		fmt.Printf("%s\n", err.Error())
+		submit.result.Result = "IE"
+		sendResult(submit)
 	}
 
-	defer containerStopAndRemove(submit)
+	err = compile(&submit, &sessionIDChan)
+	if err != nil {
+		submit.result.Result = "IE"
+		sendResult(submit)
+	}
+	if submit.result.Result == "CE" {
+		sendResult(submit)
+	}
 
-	//get container IP address
-	submit.containerInspect, _ = submit.containerCli.ContainerInspect(context.TODO(), submit.containerID)
-	/*----------------------------------------------------------------------------*/
+	err = tryTestcase(&submit, &sessionIDChan)
+	if err != nil {
+		submit.result.Result = "IE"
+		sendResult(submit)
+	}
+	println("test done")
+
+	sendResult(submit)
+	return
+}
+
+func compile(submit *submitT, sessionIDchan *chan cmdResultJSON) error {
+	recv, err := requestCmd(submit.compileCmd, "other", *submit, sessionIDchan)
+	if err != nil {
+		fmt.Printf("%s\n", err.Error())
+		return err
+	}
+	if !recv.Result {
+		submit.result.Result = "CE"
+		return nil
+	}
+	println("compile done")
+
+	recv, err = requestCmd("chown rbash_user "+submit.execFilePath, "other", *submit, sessionIDchan)
+	if err != nil {
+		fmt.Printf("%s\n", err.Error())
+		return err
+	}
+	println("chown done")
+
+	return nil
+}
+
+func tryTestcase(submit *submitT, sessionIDChan *chan cmdResultJSON) error {
+	var (
+		TLEcase      bool
+		testcaseName string
+	)
+	testcaseListFile, err := os.Open(submit.testcaseDirPath + "/testcase_list.txt")
+	if err != nil {
+		fmt.Printf("failed to open %s/testcase_list.txt\n", submit.testcaseDirPath)
+		return err
+	}
+	sc := bufio.NewScanner(testcaseListFile)
+	for sc.Scan() {
+		submit.result.Testcases[submit.result.TestcaseN].Name = strings.TrimSpace(sc.Text())
+		submit.result.TestcaseN++
+	}
+	testcaseListFile.Close()
+
+	for i := 0; i < submit.result.TestcaseN; i++ {
+		if TLEcase {
+			submit.result.Testcases[i].Result = "-"
+			continue
+		}
+		testcaseName = submit.result.Testcases[i].Name
+		outputTestcase, err := ioutil.ReadFile(submit.testcaseDirPath + "/out/" + testcaseName)
+		if err != nil {
+			println("readfile error")
+			return err
+		}
+		err = tarCopy(
+			submit.testcaseDirPath+"/in/"+testcaseName,
+			"/cafecoderUsers/"+submit.dirName+"/testcase.txt",
+			0744,
+			*submit,
+		)
+		if err != nil {
+			println("tar copy error")
+			return err
+		}
+
+		recv, err := requestCmd(submit.executeCmd, "judge", *submit, sessionIDChan)
+		if err != nil {
+			println("requestCmd error")
+			return err
+		}
+		fmt.Println(recv)
+
+		stdoutBuf, err := copyFromContainer("cafecoderUsers/"+submit.dirName+"/userStdout.txt", *submit)
+		if err != nil {
+			println("cp error")
+			return err
+		}
+		stderrBuf, err := copyFromContainer("cafecoderUsers/"+submit.dirName+"/userStderr.txt", *submit)
+		if err != nil {
+			println("cp error")
+			return err
+		}
+
+		submit.result.Testcases[i].Time = recv.Time
+
+		stdoutLines := strings.Split(stdoutBuf.String(), "\n")
+		stderrLines := strings.Split(stderrBuf.String(), "\n")
+		outputTestcaseLines := strings.Split(string(outputTestcase), "\n")
+
+		if submit.result.Testcases[i].Time > 2000 {
+			submit.result.Testcases[i].Result = "TLE"
+			TLEcase = true
+		} else {
+			if !recv.Result && stdoutBuf.String() != "" {
+				for j := 0; j < len(stderrLines); j++ {
+					println(stderrLines[j])
+				}
+				submit.result.Testcases[i].Result = "RE"
+			} else {
+				submit.result.Testcases[i].Result = "WA"
+				for j := 0; j < len(stdoutLines) && j < len(outputTestcaseLines); j++ {
+					submit.result.Testcases[i].Result = "AC"
+					if strings.TrimSpace(string(stdoutLines[j])) != strings.TrimSpace(string(outputTestcaseLines[j])) {
+						submit.result.Testcases[i].Result = "WA"
+						break
+					}
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func copyFromContainer(filepath string, submit submitT) (*bytes.Buffer, error) {
+	var buffer *bytes.Buffer
+	reader, _, err := submit.containerCli.CopyFromContainer(
+		context.TODO(),
+		submit.sessionID,
+		filepath,
+	)
+	defer reader.Close()
+	if err != nil {
+		return buffer, err
+	}
+	tr := tar.NewReader(reader)
+	tr.Next()
+	buffer = new(bytes.Buffer)
+	buffer.ReadFrom(tr)
+
+	return buffer, nil
+}
+
+func tarCopy(hostFilePath string, containerFilePath string, mode int64, submit submitT) error {
+	var buf bytes.Buffer
+	usercodeFile, err := os.Open(hostFilePath)
+	if err != nil {
+		return err
+	}
+	content, err := ioutil.ReadAll(usercodeFile)
+	if err != nil {
+		return err
+	}
+	tw := tar.NewWriter(&buf)
+	err = tw.WriteHeader(
+		&tar.Header{
+			Name: containerFilePath,
+			Mode: mode,
+			Size: int64(len(content)),
+		},
+	)
+	tw.Write(content)
+	tw.Close()
+	err = submit.containerCli.CopyToContainer(
+		context.TODO(),
+		submit.containerID,
+		"/",
+		&buf,
+		types.CopyToContainerOptions{},
+	)
+	if err != nil {
+		return err
+	}
+	usercodeFile.Close()
+	fmt.Printf("copy to container done")
+	return nil
+}
+
+func requestCmd(cmd string, mode string, submit submitT, sessionIDChan *chan cmdResultJSON) (cmdResultJSON, error) {
+	var (
+		request requestJSON
+		recv    cmdResultJSON
+	)
 	containerConn, err := net.Dial("tcp", submit.containerInspect.NetworkSettings.IPAddress+":8887")
 	if err != nil {
-		//fmtWriter(submit.errorBuffer, "%s\n", err)
-		//passResultTCP(submit, BackendHostPort)
-		submit.overallResult = 6
-		sendResult(&overAllResult, submit, err.Error())
-		return
+		return recv, err
 	}
 
-	var requests requestJSON
-	requests.Command = "mkdir -p cafecoderUsers/" + submit.directoryName
-	requests.SessionID = submit.sessionID
-	b, err := json.Marshal(requests)
+	request.Cmd = cmd
+	request.SessionID = submit.sessionID
+	request.Mode = mode
+	b, err := json.Marshal(request)
 	if err != nil {
-		//fmtWriter(submit.errorBuffer, "%s\n", err)
-		//passResultTCP(submit, BackendHostPort)
-		submit.overallResult = 6
-		sendResult(&overAllResult, submit, err.Error())
-		return
+		return recv, err
 	}
 	println(string(b))
 	containerConn.Write(b)
 	containerConn.Close()
 	for {
-		recv := <-sessionIDChan
-		if submit.sessionID == recv.SessionID {
-			fmtWriter(submit.errorBuffer, "%s\n", recv.ErrMessage)
+		recv := <-*sessionIDChan
+		if recv.SessionID == submit.sessionID {
 			break
 		}
 	}
+	return recv, nil
+}
 
-	//tar copy
-	usercodeFile, _ := os.Open("cafecoderUsers/" + submit.directoryName + "/" + submit.directoryName)
-	content, err := ioutil.ReadAll(usercodeFile)
-	var buf bytes.Buffer
-	tw := tar.NewWriter(&buf)
-	_ = tw.WriteHeader(&tar.Header{
-		Name: "cafecoderUsers/" + submit.directoryName + "/Main" + langExtention[submit.lang], // filename
-		Mode: 0777,                                                                            // permissions
-		Size: int64(len(content)),                                                             // filesize
-	})
-	tw.Write(content)
-	tw.Close()
-	submit.containerCli.CopyToContainer(
-		context.TODO(), submit.containerID,
-		"/",
-		&buf, types.CopyToContainerOptions{},
-	)
-	usercodeFile.Close()
-	println("checked")
-	ret := compile(&submit, &sessionIDChan)
-	if ret == -1 {
-		//fmtWriter(submit.resultBuffer, "%s,-1,undef,%s,0,", submit.sessionID, result[6])
-		//passResultTCP(submit, BackendHostPort)
-		submit.overallResult = 6
-		sendResult(&overAllResult, submit, "")
-		return
-	} else if ret == -2 {
-		//fmtWriter(submit.resultBuffer, "%s,-1,undef,%s,0,", submit.sessionID, result[5])
-		//passResultTCP(submit, BackendHostPort)
-		submit.overallResult = 5
-		sendResult(&overAllResult, submit, "")
-		return
+func removeContainer(submit submitT) {
+	_ = submit.containerCli.ContainerStop(context.Background(), submit.containerID, nil)
+	_ = submit.containerCli.ContainerRemove(context.Background(), submit.containerID, types.ContainerRemoveOptions{RemoveVolumes: true, RemoveLinks: true, Force: true})
+	labelFilters := filters.NewArgs()
+	submit.containerCli.ContainersPrune(context.Background(), labelFilters)
+	fmt.Println("container " + submit.sessionID + " removed")
+}
+
+func createContainer(submit *submitT) error {
+	var err error
+	submit.containerCli, err = client.NewClientWithOpts(client.WithVersion("1.35"))
+	defer submit.containerCli.Close()
+	if err != nil {
+		return err
 	}
 
-	ret = tryTestcase(&submit, &sessionIDChan, &overAllResult)
-	fmt.Println("test done")
-	if ret == -1 {
-		submit.overallResult = 6
-		sendResult(&overAllResult, submit, "")
-		return
+	config := &container.Config{Image: "cafecoder"}
+	resp, err := submit.containerCli.ContainerCreate(context.TODO(), config, nil, nil, submit.sessionID)
+	if err != nil {
+		return err
 	}
-	
-	sendResult(&overAllResult, submit, "")
-	return
+
+	submit.containerID = resp.ID
+	err = submit.containerCli.ContainerStart(context.TODO(), submit.containerID, types.ContainerStartOptions{})
+	if err != nil {
+		return err
+	}
+
+	submit.containerInspect, err = submit.containerCli.ContainerInspect(context.TODO(), submit.containerID)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func langConfig(submit *submitT) {
+	submit.execDirPath = "/cafecoderUsers/" + submit.dirName
+	switch submit.lang {
+	case 0: //C11
+		submit.compileCmd = "gcc" + " /cafecoderUsers/" + submit.dirName + "/Main.c" + " -O2 " + " -lm" + " -std=gnu11" + " -o" + " /cafecoderUsers/" + submit.dirName + "/Main.out"
+		submit.execFilePath = "/cafecoderUsers/" + submit.dirName + "/Main.out"
+		submit.executeCmd = "./cafecoderUsers/" + submit.dirName + "/Main.out"
+		submit.fileName = "Main.c"
+	case 1: //C++17
+		submit.compileCmd = "g++" + " /cafecoderUsers/" + submit.dirName + "/Main.cpp" + " -O2 " + " -lm" + " -std=gnu++17" + " -o" + " /cafecoderUsers/" + submit.dirName + "/Main.out"
+		submit.execFilePath = "/cafecoderUsers/" + submit.dirName + "/Main.out"
+		submit.executeCmd = "./cafecoderUsers/" + submit.dirName + "/Main.out"
+		submit.fileName = "Main.cpp"
+	case 2: //java8
+		submit.compileCmd = "javac" + " /cafecoderUsers/" + submit.dirName + "/Main.java" + " -d" + " /cafecoderUsers/" + submit.dirName
+		submit.execFilePath = "/cafecoderUsers/" + submit.dirName + "/Main.class"
+		submit.executeCmd = "java" + " -cp" + " /cafecoderUsers/" + submit.dirName + " Main"
+		submit.fileName = "Main.java"
+	case 3: //python3
+		submit.compileCmd = "python3" + " -m" + " py_compile" + " /cafecoderUsers/" + submit.dirName + "/Main.py"
+		submit.execFilePath = "/cafecoderUsers/" + submit.dirName + "/Main.py"
+		submit.executeCmd = "python3 /cafecoderUsers/" + submit.dirName + "/Main.py"
+		submit.fileName = "Main.py"
+	case 4: //C#
+		submit.compileCmd = "mcs" + " /cafecoderUsers/" + submit.dirName + "/Main.cs" + " -out:/cafecoderUsers/" + submit.dirName + "/Main.exe"
+		submit.execFilePath = "/cafecoderUsers/" + submit.dirName + "/Main.exe"
+		submit.executeCmd = "mono /cafecoderUsers/" + submit.dirName + "/Main.exe"
+		submit.fileName = "Main.cs"
+	case 5: //golang
+		submit.compileCmd = "go build " + submit.dirName + " /Main.go -o " + "/cafecoderUsers/" + submit.dirName + "/Main.out"
+		submit.execFilePath = "/cafecoderUsers/" + submit.dirName + "/Main.out"
+		submit.executeCmd = "./cafecoderUsers/" + submit.dirName + "/Main.out"
+		submit.fileName = "Main.go"
+	}
+
+}
+
+func validationCheck(csv []string) string {
+	if len(csv) > 6 {
+		return "too many args"
+	}
+	if len(csv) < 6 {
+		return "too few args"
+	}
+	for i := range csv {
+		if !checkRegexp(`[(A-Za-z0-9\./_\/)]*`, strings.TrimSpace(csv[i])) {
+			return "Inputs are included another characters[0-9],[a-z],[A-Z],'.','/','_'"
+		}
+	}
+	return ""
 }
 
 func main() {
-	commandChickets := commandChicket{channel: make(map[string]chan cmdResultJSON)}
-	go manageCommands(&commandChickets)
+	cmdChickets := cmdChicket{channel: make(map[string]chan cmdResultJSON)}
+	go manageCmds(&cmdChickets)
 	listen, err := net.Listen("tcp", "0.0.0.0:8888")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%s\n", err)
@@ -646,23 +537,23 @@ func main() {
 	for {
 		cnct, err := listen.Accept()
 		if err != nil {
-			continue //continue to receive request
+			fmt.Fprintf(os.Stderr, "%s\n", err)
 		}
-		message, err := bufio.NewReader(cnct).ReadString('\n')
+		// input
+		message, _ := bufio.NewReader(cnct).ReadString('\n')
 		println(string(message))
-		//reader := csv.NewReader(messageLen)
 		cnct.Close()
-		println("connection closed")
+		//parse csv
 		session := strings.Split(message, ",")
 		if len(session) <= 2 {
 			println(session)
 			continue
 		}
-		if _, exist := commandChickets.channel[session[1]]; exist { //if sessionID exists...
-			fmt.Fprintf(os.Stdout, "%s has already existed\n", session[1])
+		if _, exist := cmdChickets.channel[session[1]]; exist {
+			fmt.Printf("%s has already existed\n", session[1])
 		} else {
-			commandChickets.channel[session[1]] = make(chan cmdResultJSON)
-			go executeJudge(session, &tftpCli, &commandChickets.channel)
+			cmdChickets.channel[session[1]] = make(chan cmdResultJSON)
+			go judge(session, &tftpCli, &cmdChickets.channel)
 		}
 	}
 }

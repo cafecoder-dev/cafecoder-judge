@@ -1,2 +1,2 @@
-executeUsercode:executeUsercode.go
+judge:judge.go
 	go build -o ./../..
