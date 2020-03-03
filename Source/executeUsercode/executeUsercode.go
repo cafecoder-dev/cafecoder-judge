@@ -69,7 +69,7 @@ func executeJudge(request requestJSON) {
 	cmdResult.SessionID = request.SessionID
 	//exec.Command("sh", "-c", "ls > userStdout.txt").Run()
 	if request.Mode == "judge" {
-		cmd := exec.Command("sh", "-c", request.Cmd+" < testcase.txt > userStdout.txt 2> userStderr.txt")
+		cmd := exec.Command("sh", "-c", request.Cmd)
 		start := time.Now().UnixNano()
 		err := cmd.Start()
 		if err != nil {
@@ -99,7 +99,7 @@ func executeJudge(request requestJSON) {
 			cmdResult.Result = true
 		}
 	} else {
-		err := exec.Command("sh", "-c", request.Cmd+"< testcase.txt > userStdout.txt 2> userStderr.txt").Run()
+		err := exec.Command("sh", "-c", request.Cmd).Run()
 		if err != nil {
 			cmdResult.Result = false
 		} else {

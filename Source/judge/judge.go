@@ -151,8 +151,9 @@ func sendResult(submit submitT) {
 	if priorityMap[submit.result.Result] < 6 {
 		submit.result.Result = "AC"
 		for i := 0; i < submit.result.TestcaseN; i++ {
+			fmt.Printf("i:%d %s\n", i, submit.result.Testcases[i].Result)
 			if priorityMap[submit.result.Testcases[i].Result] > priorityMap[submit.result.Result] {
-				submit.result.Testcases[i].Result = submit.result.Result
+				submit.result.Result = submit.result.Testcases[i].Result
 			}
 			if submit.result.Testcases[i].Time > submit.result.Time {
 				submit.result.Time = submit.result.Testcases[i].Time
@@ -209,7 +210,7 @@ func judge(csv []string, tftpCli **tftp.Client, cmdChickets *map[string]chan cmd
 		sendResult(submit)
 		return
 	}
-	//defer removeContainer(submit)
+	defer removeContainer(submit)
 
 	err = tarCopy(
 		"cafecoderUsers/"+submit.dirName+"/"+submit.dirName,
@@ -249,7 +250,7 @@ func judge(csv []string, tftpCli **tftp.Client, cmdChickets *map[string]chan cmd
 
 func compile(submit *submitT, sessionIDchan *chan cmdResultJSON) error {
 	println("check")
-	recv, err := requestCmd(submit.compileCmd, "judge", *submit, sessionIDchan)
+	recv, err := requestCmd(submit.compileCmd, "other", *submit, sessionIDchan)
 	if err != nil {
 		fmt.Printf("%s\n", err.Error())
 		return err
@@ -260,15 +261,6 @@ func compile(submit *submitT, sessionIDchan *chan cmdResultJSON) error {
 		return nil
 	}
 	println("compile done")
-
-	/*
-		recv, err = requestCmd("chown rbash_user "+submit.fileName, "other", *submit, sessionIDchan)
-		if err != nil {
-			fmt.Printf("%s\n", err.Error())
-			return err
-		}
-		println("chown done")
-	*/
 	return nil
 }
 
@@ -314,7 +306,7 @@ func tryTestcase(submit *submitT, sessionIDChan *chan cmdResultJSON) error {
 
 		fmt.Printf("code:\"%s\"\n", submit.executeCmd)
 
-		recv, err := requestCmd(submit.executeCmd, "other", *submit, sessionIDChan)
+		recv, err := requestCmd(submit.executeCmd, "judge", *submit, sessionIDChan)
 		if err != nil {
 			println("requestCmd error")
 			return err
@@ -357,6 +349,7 @@ func tryTestcase(submit *submitT, sessionIDChan *chan cmdResultJSON) error {
 				}
 			}
 		}
+		//fmt.Printf("i:%d result:%s\n", i, submit.result.Testcases[i].Result)
 	}
 	return nil
 }
@@ -484,28 +477,28 @@ func createContainer(submit *submitT) error {
 func langConfig(submit *submitT) {
 	switch submit.lang {
 	case 0: //C11
-		submit.compileCmd = "gcc Main.c -O2 -lm -std=gnu11 -o Main.out"
-		submit.executeCmd = "./Main.out"
+		submit.compileCmd = "gcc Main.c -O2 -lm -std=gnu11 -o Main.out 2> userStderr.txt"
+		submit.executeCmd = "./Main.out < testcase.txt > userStdout.txt 2> userStderr.txt"
 		submit.fileName = "Main.c"
 	case 1: //C++17
-		submit.compileCmd = "g++ Main.cpp -O2 -lm -std=gnu++17 -o Main.out"
-		submit.executeCmd = "./Main.out"
+		submit.compileCmd = "g++ Main.cpp -O2 -lm -std=gnu++17 -o Main.out 2> userStderr.txt"
+		submit.executeCmd = "./Main.out < testcase.txt > userStdout.txt 2> userStderr.txt"
 		submit.fileName = "Main.cpp"
 	case 2: //java8
-		submit.compileCmd = "javac Main.java"
-		submit.executeCmd = "java Main"
+		submit.compileCmd = "javac Main.java 2> userStderr.txt"
+		submit.executeCmd = "java Main < testcase.txt > userStdout.txt 2> userStderr.txt"
 		submit.fileName = "Main.java"
 	case 3: //python3
-		submit.compileCmd = "python3 -m py_compile Main.py"
-		submit.executeCmd = "python3 Main.py"
+		submit.compileCmd = "python3 -m py_compile Main.py 2> userStderr.txt"
+		submit.executeCmd = "python3 Main.py < testcase.txt > userStdout.txt 2> userStderr.txt"
 		submit.fileName = "Main.py"
 	case 4: //C#
-		submit.compileCmd = "mcs Main.cs -out:Main.exe"
-		submit.executeCmd = "mono Main.exe"
+		submit.compileCmd = "mcs Main.cs -out:Main.exe 2> userStderr.txt"
+		submit.executeCmd = "mono Main.exe < testcase.txt > userStdout.txt 2> userStderr.txt"
 		submit.fileName = "Main.cs"
 	case 5: //golang
-		submit.compileCmd = "go build Main.go -o Main.out"
-		submit.executeCmd = ".Main.out"
+		submit.compileCmd = "go build Main.go -o Main.out 2> userStderr.txt"
+		submit.executeCmd = ".Main.out < testcase.txt > userStdout.txt 2> userStderr.txt"
 		submit.fileName = "Main.go"
 	}
 
