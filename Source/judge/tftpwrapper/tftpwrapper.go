@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	TftpHostPort = "localhost:4444/"
+	TftpHostPort = "133.130.101.250:4444/"
 )
 
 func DownloadFromPath(cli **tftp.Client, path string) []byte {

@@ -13,6 +13,7 @@ import (
 	"io/ioutil"
 	"net"
 	"os"
+	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
@@ -281,6 +282,7 @@ func tryTestcase(submit *submitT, sessionIDChan *chan cmdResultJSON) error {
 		submit.result.TestcaseN++
 	}
 	testcaseListFile.Close()
+	fmt.Printf("N = %d", submit.testcaseN)
 
 	fmt.Printf("N=%d\n", submit.result.TestcaseN)
 	for i := 0; i < submit.result.TestcaseN; i++ {
@@ -304,6 +306,7 @@ func tryTestcase(submit *submitT, sessionIDChan *chan cmdResultJSON) error {
 			println("tar copy error")
 			return err
 		}
+		fmt.Println(recv)
 
 		fmt.Printf("code:\"%s\"\n", submit.executeCmd)
 

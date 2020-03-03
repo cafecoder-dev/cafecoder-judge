@@ -1,1 +1,8 @@
+.gdb_history
+core
+executeUsercode
+judge
+log
+nohup.out
+peda-session-dockerd.txt
 test/*
