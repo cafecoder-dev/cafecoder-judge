@@ -13,7 +13,6 @@ import (
 	"io/ioutil"
 	"net"
 	"os"
-	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
@@ -24,15 +23,13 @@ import (
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/client"
 	"pack.ag/tftp"
-
-	"./tftpwrapper"
 )
 
 const (
 	/*BackendHostPort ... backend's IP-address and port-number*/
-	BackendHostPort = "133.130.101.250:5963"
-	//BackendHostPort = "localhost:5963"
-	maxTestcaseN = 50
+	//BackendHostPort = "133.130.101.250:5963"
+	BackendHostPort = "localhost:5963"
+	maxTestcaseN    = 50
 )
 
 type cmdChicket struct {
@@ -197,8 +194,8 @@ func judge(csv []string, tftpCli **tftp.Client, cmdChickets *map[string]chan cmd
 	langConfig(&submit)
 
 	/*todo: なんとかする*/
-	submit.code = tftpwrapper.DownloadFromPath(tftpCli, submit.usercodePath)
-	//submit.code, _ = ioutil.ReadFile(submit.usercodePath)
+	//submit.code = tftpwrapper.DownloadFromPath(tftpCli, submit.usercodePath)
+	submit.code, _ = ioutil.ReadFile(submit.usercodePath)
 
 	os.Mkdir("cafecoderUsers/"+submit.dirName, 0777)
 	file, _ := os.Create("cafecoderUsers/" + submit.dirName + "/" + submit.dirName)
@@ -282,7 +279,6 @@ func tryTestcase(submit *submitT, sessionIDChan *chan cmdResultJSON) error {
 		submit.result.TestcaseN++
 	}
 	testcaseListFile.Close()
-	fmt.Printf("N = %d", submit.testcaseN)
 
 	fmt.Printf("N=%d\n", submit.result.TestcaseN)
 	for i := 0; i < submit.result.TestcaseN; i++ {
@@ -306,9 +302,6 @@ func tryTestcase(submit *submitT, sessionIDChan *chan cmdResultJSON) error {
 			println("tar copy error")
 			return err
 		}
-		fmt.Println(recv)
-
-		fmt.Printf("code:\"%s\"\n", submit.executeCmd)
 
 		recv, err := requestCmd(submit.executeCmd, "judge", *submit, sessionIDChan)
 		if err != nil {
