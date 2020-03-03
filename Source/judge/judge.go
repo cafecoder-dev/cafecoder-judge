@@ -209,7 +209,7 @@ func judge(csv []string, tftpCli **tftp.Client, cmdChickets *map[string]chan cmd
 		sendResult(submit)
 		return
 	}
-	defer removeContainer(submit)
+	//defer removeContainer(submit)
 
 	err = tarCopy(
 		"cafecoderUsers/"+submit.dirName+"/"+submit.dirName,
@@ -249,7 +249,7 @@ func judge(csv []string, tftpCli **tftp.Client, cmdChickets *map[string]chan cmd
 
 func compile(submit *submitT, sessionIDchan *chan cmdResultJSON) error {
 	println("check")
-	recv, err := requestCmd(submit.compileCmd, "other", *submit, sessionIDchan)
+	recv, err := requestCmd(submit.compileCmd, "judge", *submit, sessionIDchan)
 	if err != nil {
 		fmt.Printf("%s\n", err.Error())
 		return err
@@ -312,7 +312,9 @@ func tryTestcase(submit *submitT, sessionIDChan *chan cmdResultJSON) error {
 			return err
 		}
 
-		recv, err := requestCmd(submit.executeCmd, "judge", *submit, sessionIDChan)
+		fmt.Printf("code:\"%s\"\n", submit.executeCmd)
+
+		recv, err := requestCmd(submit.executeCmd, "other", *submit, sessionIDChan)
 		if err != nil {
 			println("requestCmd error")
 			return err

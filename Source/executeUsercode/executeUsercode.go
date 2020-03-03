@@ -49,9 +49,8 @@ func main() {
 	}
 }
 
-func readError(cmdResult *cmdResultJSON, directoryName string) {
+func readError(cmdResult *cmdResultJSON) {
 	stderrFp, err := os.Open("userStderr.txt")
-	defer stderrFp.Close()
 	if err != nil {
 		cmdResult.ErrMessage = err.Error()
 	}
@@ -61,13 +60,14 @@ func readError(cmdResult *cmdResultJSON, directoryName string) {
 		cmdResult.ErrMessage = err.Error()
 		return
 	}
-	cmdResult.ErrMessage = base64.StdEncoding.EncodeToString(buf)
-	//cmdResult.ErrMessage = string(buf[:n])
+	cmdResult.ErrMessage += base64.StdEncoding.EncodeToString(buf) + "\n"
+	stderrFp.Close()
 }
 
 func executeJudge(request requestJSON) {
 	var cmdResult cmdResultJSON
 	cmdResult.SessionID = request.SessionID
+	//exec.Command("sh", "-c", "ls > userStdout.txt").Run()
 	if request.Mode == "judge" {
 		cmd := exec.Command("sh", "-c", request.Cmd+" < testcase.txt > userStdout.txt 2> userStderr.txt")
 		start := time.Now().UnixNano()
@@ -98,21 +98,15 @@ func executeJudge(request requestJSON) {
 		} else {
 			cmdResult.Result = true
 		}
-
-		readError(&cmdResult, request.DirName)
-
 	} else {
-		err := exec.Command("sh", "-c", request.Cmd+" > userStdout.txt 2> userStderr.txt").Run()
+		err := exec.Command("sh", "-c", request.Cmd+"< testcase.txt > userStdout.txt 2> userStderr.txt").Run()
 		if err != nil {
 			cmdResult.Result = false
-
 		} else {
 			cmdResult.Result = true
 		}
-
-		readError(&cmdResult, request.DirName)
 	}
-
+	readError(&cmdResult)
 	conn, err := net.Dial("tcp", HostPort)
 	b, err := json.Marshal(cmdResult)
 	if err != nil {
