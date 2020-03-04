@@ -13,10 +13,10 @@ apt install gcc -y && \
 apt install g++ -y  && \
 apt install default-jdk -y && \
 apt install python3 -y && \
-:"install golang(should add to .bashrc...?)" && \
+:"install golang" && \
 wget https://dl.google.com/go/go1.14.linux-amd64.tar.gz && \
 tar -C /usr/local -xzf go1.14.linux-amd64.tar.gz && \
-export PATH=$PATH:/usr/local/go/bin && \
+sed '$a export PATH=$PATH:/usr/local/go/bin' /etc/profile && \
 apt install apt-transport-https dirmngr -y && \
 COPY ./executeUsercode .
 WORKDIR / 
