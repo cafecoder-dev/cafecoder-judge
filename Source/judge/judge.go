@@ -23,13 +23,15 @@ import (
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/client"
 	"pack.ag/tftp"
+
+	"./tftpwrapper"
 )
 
 const (
 	/*BackendHostPort ... backend's IP-address and port-number*/
-	//BackendHostPort = "133.130.101.250:5963"
-	BackendHostPort = "localhost:5963"
-	maxTestcaseN    = 50
+	BackendHostPort = "133.130.101.250:5963"
+	//BackendHostPort = "localhost:5963"
+	maxTestcaseN = 50
 )
 
 type cmdChicket struct {
@@ -194,8 +196,8 @@ func judge(csv []string, tftpCli **tftp.Client, cmdChickets *map[string]chan cmd
 	langConfig(&submit)
 
 	/*todo: なんとかする*/
-	//submit.code = tftpwrapper.DownloadFromPath(tftpCli, submit.usercodePath)
-	submit.code, _ = ioutil.ReadFile(submit.usercodePath)
+	submit.code = tftpwrapper.DownloadFromPath(tftpCli, submit.usercodePath)
+	//submit.code, _ = ioutil.ReadFile(submit.usercodePath)
 
 	os.Mkdir("cafecoderUsers/"+submit.dirName, 0777)
 	file, _ := os.Create("cafecoderUsers/" + submit.dirName + "/" + submit.dirName)
