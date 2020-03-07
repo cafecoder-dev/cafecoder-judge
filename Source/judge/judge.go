@@ -250,7 +250,6 @@ func judge(csv []string, tftpCli **tftp.Client, cmdChickets *map[string]chan cmd
 }
 
 func compile(submit *submitT, sessionIDchan *chan cmdResultJSON) error {
-	println("check")
 	recv, err := requestCmd(submit.compileCmd, "other", *submit, sessionIDchan)
 	if err != nil {
 		fmt.Printf("%s\n", err.Error())
