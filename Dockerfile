@@ -16,7 +16,7 @@ apt install python3 -y && \
 wget https://dl.google.com/go/go1.14.linux-amd64.tar.gz && \
 tar -C /usr/local -xzf go1.14.linux-amd64.tar.gz && \
 sed '$a export PATH=$PATH:/usr/local/go/bin' /etc/profile && \
-apt install apt-transport-https dirmngr -y && \
+apt install apt-transport-https dirmngr -y
 COPY ./executeUsercode .
 WORKDIR / 
 

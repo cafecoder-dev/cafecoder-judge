@@ -21,6 +21,7 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/client"
+	_ "github.com/go-sql-driver/mysql"
 	"github.com/jinzhu/gorm"
 	"pack.ag/tftp"
 )
@@ -169,11 +170,11 @@ func sendResult(submit submitT) {
 		submit.result.ErrMessage = base64.StdEncoding.EncodeToString([]byte(submit.errorBuffer.String()))
 	}
 
-	b, _ := json.Marshal(submit.result)
-	back := submitT{resultBuffer: new(bytes.Buffer)}
-	fmtWriter(back.resultBuffer, "%s", string(b))
-	fmt.Println("pass TCP")
-	passResultTCP(back, BackendHostPort)
+	db, err := sqlConnect()
+	if err != nil {
+		fmt.Println(err.Error())
+	}
+	db.Table("users").Where("sessionID=?", submit.sessionID).Update("status", submit.result.Result)
 }
 
 func judge(args submitGORM, tftpCli **tftp.Client, cmdChickets *map[string]chan cmdResultJSON) {
@@ -564,12 +565,12 @@ func main() {
 				println("NaaN")
 				break
 			}
-			fmt.Printf("id:%s status:%s\n", res[i].SessionID, res[i].Status)
 
 			if _, exist := cmdChickets.channel[res[i].SessionID]; exist {
-				fmt.Printf("%s has already existed\n", res[i].SessionID)
+				//fmt.Printf("%s has already existed\n", res[i].SessionID)
 				continue
 			} else {
+				fmt.Printf("id:%s status:%s\n", res[i].SessionID, res[i].Status)
 				cmdChickets.channel[res[i].SessionID] = make(chan cmdResultJSON)
 				go judge(res[i], &tftpCli, &cmdChickets.channel)
 			}
