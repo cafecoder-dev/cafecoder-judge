@@ -14,7 +14,6 @@ import (
 	"net"
 	"os"
 	"regexp"
-	"strconv"
 	"strings"
 	"sync"
 
@@ -22,6 +21,7 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/client"
+	"github.com/jinzhu/gorm"
 	"pack.ag/tftp"
 )
 
@@ -68,12 +68,20 @@ type testcaseJSON struct {
 	Time       int64  `json:"time"`
 }
 
+type submitGORM struct {
+	Status       string `gorm:"column:status"`
+	UsercodePath string `gorm:"column:usercodePath"`
+	SessionID    string `gorm:"column:sessionID"`
+	Language     string `gorm:"column:language"`
+	TestcasePath string `gorm:"column:testcasePath"`
+	ProblemID    string `gorm:"column:problemID"`
+}
+
 type submitT struct {
-	sessionID       string //csv[1]
-	usercodePath    string //csv[2]
-	lang            int    //csv[3]
-	testcaseDirPath string //csv[4]
-	score           int    //csv[5]
+	sessionID       string
+	usercodePath    string
+	lang            string
+	testcaseDirPath string
 
 	dirName      string
 	execDirPath  string
@@ -146,7 +154,6 @@ func sendResult(submit submitT) {
 	os.RemoveAll("cafecoderUsers/" + submit.dirName)
 	fmt.Println("submit result")
 	submit.result.SessionID = submit.sessionID
-	submit.result.Score = submit.score
 	if priorityMap[submit.result.Result] < 6 {
 		submit.result.Result = "AC"
 		for i := 0; i < submit.result.TestcaseN; i++ {
@@ -169,12 +176,12 @@ func sendResult(submit submitT) {
 	passResultTCP(back, BackendHostPort)
 }
 
-func judge(csv []string, tftpCli **tftp.Client, cmdChickets *map[string]chan cmdResultJSON) {
+func judge(args submitGORM, tftpCli **tftp.Client, cmdChickets *map[string]chan cmdResultJSON) {
 	var submit = submitT{errorBuffer: new(bytes.Buffer), resultBuffer: new(bytes.Buffer)}
 
-	submit.sessionID = strings.TrimSpace(csv[1])
+	submit.sessionID = args.SessionID
 
-	errMessage := validationCheck(csv)
+	errMessage := validationCheck(args)
 	if errMessage != "" {
 		fmt.Printf("%s\n", errMessage)
 		submit.result.Result = "IE"
@@ -182,10 +189,9 @@ func judge(csv []string, tftpCli **tftp.Client, cmdChickets *map[string]chan cmd
 		return
 	}
 
-	submit.usercodePath = csv[2]
-	submit.lang, _ = strconv.Atoi(csv[3])
-	submit.testcaseDirPath = csv[4]
-	submit.score, _ = strconv.Atoi(csv[5]) //don't need...:(
+	submit.usercodePath = args.UsercodePath
+	submit.lang = args.Language
+	submit.testcaseDirPath = args.TestcasePath
 	sessionIDChan := (*cmdChickets)[submit.sessionID]
 	defer func() { delete((*cmdChickets), submit.sessionID) }()
 	hash := sha256.Sum256([]byte(submit.sessionID))
@@ -473,27 +479,27 @@ func createContainer(submit *submitT) error {
 
 func langConfig(submit *submitT) {
 	switch submit.lang {
-	case 0: //C11
+	case "C11": //C11
 		submit.compileCmd = "gcc Main.c -O2 -lm -std=gnu11 -o Main.out 2> userStderr.txt"
 		submit.executeCmd = "./Main.out < testcase.txt > userStdout.txt 2> userStderr.txt"
 		submit.fileName = "Main.c"
-	case 1: //C++17
+	case "C++17": //C++17
 		submit.compileCmd = "g++ Main.cpp -O2 -lm -std=gnu++17 -o Main.out 2> userStderr.txt"
 		submit.executeCmd = "./Main.out < testcase.txt > userStdout.txt 2> userStderr.txt"
 		submit.fileName = "Main.cpp"
-	case 2: //java8
+	case "Java8": //java8
 		submit.compileCmd = "javac Main.java 2> userStderr.txt"
 		submit.executeCmd = "java Main < testcase.txt > userStdout.txt 2> userStderr.txt"
 		submit.fileName = "Main.java"
-	case 3: //python3
+	case "Python3": //python3
 		submit.compileCmd = "python3 -m py_compile Main.py 2> userStderr.txt"
 		submit.executeCmd = "python3 Main.py < testcase.txt > userStdout.txt 2> userStderr.txt"
 		submit.fileName = "Main.py"
-	case 4: //C#
+	case "C#": //C#
 		submit.compileCmd = "mcs Main.cs -out:Main.exe 2> userStderr.txt"
 		submit.executeCmd = "mono Main.exe < testcase.txt > userStdout.txt 2> userStderr.txt"
 		submit.fileName = "Main.cs"
-	case 5: //golang
+	case "Go": //golang
 		submit.compileCmd = "go build Main.go -o Main.out 2> userStderr.txt"
 		submit.executeCmd = ".Main.out < testcase.txt > userStdout.txt 2> userStderr.txt"
 		submit.fileName = "Main.go"
@@ -501,25 +507,48 @@ func langConfig(submit *submitT) {
 
 }
 
-func validationCheck(csv []string) string {
-	if len(csv) > 6 {
-		return "too many args"
+func validationCheck(args submitGORM) string {
+	if !checkRegexp(`[(A-Za-z0-9\./_\/)]*`, args.Language) {
+		return "Inputs are included another characters[0-9],[a-z],[A-Z],'.','/','_'"
 	}
-	if len(csv) < 6 {
-		return "too few args"
+	if !checkRegexp(`[(A-Za-z0-9\./_\/)]*`, args.ProblemID) {
+		return "Inputs are included another characters[0-9],[a-z],[A-Z],'.','/','_'"
 	}
-	for i := range csv {
-		if !checkRegexp(`[(A-Za-z0-9\./_\/)]*`, strings.TrimSpace(csv[i])) {
-			return "Inputs are included another characters[0-9],[a-z],[A-Z],'.','/','_'"
-		}
+	if !checkRegexp(`[(A-Za-z0-9\./_\/)]*`, args.SessionID) {
+		return "Inputs are included another characters[0-9],[a-z],[A-Z],'.','/','_'"
+	}
+	if !checkRegexp(`[(A-Za-z0-9\./_\/)]*`, args.Status) {
+		return "Inputs are included another characters[0-9],[a-z],[A-Z],'.','/','_'"
+	}
+	if !checkRegexp(`[(A-Za-z0-9\./_\/)]*`, args.TestcasePath) {
+		return "Inputs are included another characters[0-9],[a-z],[A-Z],'.','/','_'"
+	}
+	if !checkRegexp(`[(A-Za-z0-9\./_\/)]*`, args.UsercodePath) {
+		return "Inputs are included another characters[0-9],[a-z],[A-Z],'.','/','_'"
 	}
 	return ""
+}
+
+func sqlConnect() (database *gorm.DB, err error) {
+	bytes, err := ioutil.ReadFile("pswd.txt")
+	if err != nil {
+		panic(err)
+	}
+
+	DBMS := "mysql"
+	USER := "earlgray283"
+	PASS := string(bytes)
+	PROTOCOL := "tcp(localhost)"
+	DBNAME := "cafecoder"
+
+	CONNECT := USER + ":" + PASS + "@" + PROTOCOL + "/" + DBNAME + "?charset=utf8&parseTime=true&loc=Asia%2FTokyo"
+	return gorm.Open(DBMS, CONNECT)
 }
 
 func main() {
 	cmdChickets := cmdChicket{channel: make(map[string]chan cmdResultJSON)}
 	go manageCmds(&cmdChickets)
-	listen, err := net.Listen("tcp", "0.0.0.0:8888")
+	db, err := sqlConnect()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%s\n", err)
 	}
@@ -528,25 +557,22 @@ func main() {
 		fmt.Fprintf(os.Stderr, "%s\n", err)
 	}
 	for {
-		cnct, err := listen.Accept()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "%s\n", err)
-		}
-		// input
-		message, _ := bufio.NewReader(cnct).ReadString('\n')
-		println(string(message))
-		cnct.Close()
-		//parse csv
-		session := strings.Split(message, ",")
-		if len(session) <= 2 {
-			println(session)
-			continue
-		}
-		if _, exist := cmdChickets.channel[session[1]]; exist {
-			fmt.Printf("%s has already existed\n", session[1])
-		} else {
-			cmdChickets.channel[session[1]] = make(chan cmdResultJSON)
-			go judge(session, &tftpCli, &cmdChickets.channel)
+		res := []submitGORM{}
+		db.Table("users").Where("status='WR' OR status='WJ'").Find(&res)
+		for i := 0; i < len(res); i++ {
+			if res[i].Status == "" || res[i].SessionID == "" {
+				println("NaaN")
+				break
+			}
+			fmt.Printf("id:%s status:%s\n", res[i].SessionID, res[i].Status)
+
+			if _, exist := cmdChickets.channel[res[i].SessionID]; exist {
+				fmt.Printf("%s has already existed\n", res[i].SessionID)
+				continue
+			} else {
+				cmdChickets.channel[res[i].SessionID] = make(chan cmdResultJSON)
+				go judge(res[i], &tftpCli, &cmdChickets.channel)
+			}
 		}
 	}
 }

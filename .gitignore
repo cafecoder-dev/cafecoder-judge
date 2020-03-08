@@ -6,3 +6,4 @@ log
 nohup.out
 peda-session-dockerd.txt
 test/*
+pswd.txt
