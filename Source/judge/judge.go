@@ -502,7 +502,7 @@ func langConfig(submit *submitT) {
 		submit.fileName = "Main.cs"
 	case "Go": //golang
 		submit.compileCmd = "go build Main.go -o Main.out 2> userStderr.txt"
-		submit.executeCmd = ".Main.out < testcase.txt > userStdout.txt 2> userStderr.txt"
+		submit.executeCmd = "./Main.out < testcase.txt > userStdout.txt 2> userStderr.txt"
 		submit.fileName = "Main.go"
 	}
 
