@@ -31,7 +31,11 @@ const (
 	//BackendHostPort = "133.130.101.250:5963"
 	BackendHostPort = "localhost:5963"
 	maxTestcaseN    = 50
+	/*maxJudge ... Max number judge can execute at the same time*/
+	maxJudge = 10
 )
+
+var now int
 
 type cmdChicket struct {
 	sync.Mutex
@@ -175,6 +179,7 @@ func sendResult(submit submitT) {
 		fmt.Println(err.Error())
 	}
 	db.Table("users").Where("sessionID=?", submit.sessionID).Update("status", submit.result.Result)
+	now--
 }
 
 func judge(args submitGORM, tftpCli **tftp.Client, cmdChickets *map[string]chan cmdResultJSON) {
@@ -480,32 +485,47 @@ func createContainer(submit *submitT) error {
 
 func langConfig(submit *submitT) {
 	switch submit.lang {
-	case "C11": //C11
-		submit.compileCmd = "gcc Main.c -O2 -lm -std=gnu11 -o Main.out 2> userStderr.txt"
+	case "c17_gcc9": //C11
+		submit.compileCmd = "gcc-9 Main.c -O2 -lm -std=gnu17 -o Main.out 2> userStderr.txt"
 		submit.executeCmd = "./Main.out < testcase.txt > userStdout.txt 2> userStderr.txt"
 		submit.fileName = "Main.c"
-	case "C++17": //C++17
-		submit.compileCmd = "g++ Main.cpp -O2 -lm -std=gnu++17 -o Main.out 2> userStderr.txt"
+	case "cpp17_gcc9": //C++17
+		submit.compileCmd = "g++-9 Main.cpp -O2 -lm -std=gnu++17 -o Main.out 2> userStderr.txt"
 		submit.executeCmd = "./Main.out < testcase.txt > userStdout.txt 2> userStderr.txt"
 		submit.fileName = "Main.cpp"
-	case "Java8": //java8
+	case "cpp20_gcc9": //C++17
+		submit.compileCmd = "g++-9 Main.cpp -O2 -lm -std=gnu++2a -o Main.out 2> userStderr.txt"
+		submit.executeCmd = "./Main.out < testcase.txt > userStdout.txt 2> userStderr.txt"
+		submit.fileName = "Main.cpp"
+	case "java11": //java8
 		submit.compileCmd = "javac Main.java 2> userStderr.txt"
 		submit.executeCmd = "java Main < testcase.txt > userStdout.txt 2> userStderr.txt"
 		submit.fileName = "Main.java"
-	case "Python3": //python3
+	case "python36": //python3
 		submit.compileCmd = "python3 -m py_compile Main.py 2> userStderr.txt"
 		submit.executeCmd = "python3 Main.py < testcase.txt > userStdout.txt 2> userStderr.txt"
 		submit.fileName = "Main.py"
-	case "C#": //C#
+	case "cs_mono6": //C#
 		submit.compileCmd = "mcs Main.cs -out:Main.exe 2> userStderr.txt"
 		submit.executeCmd = "mono Main.exe < testcase.txt > userStdout.txt 2> userStderr.txt"
 		submit.fileName = "Main.cs"
-	case "Go": //golang
-		submit.compileCmd = "go build Main.go -o Main.out 2> userStderr.txt"
-		submit.executeCmd = "./Main.out < testcase.txt > userStdout.txt 2> userStderr.txt"
+	case "cs_dotnet31":
+		submit.compileCmd = "mkdir Main && mv Main.cs Main && cd Main && dotnet new console 2> userStderr.txt && dotnet publish -o . 2> userStderr.txt"
+		submit.executeCmd = "dotnet ./Main/Main.dll > userStdout.txt 2> userStderr.txt"
+		submit.fileName = "Main.cs"
+	case "go_114": //golang
+		submit.compileCmd = "export PATH=$PATH:/usr/local/go/bin && mkdir Main && mv Main.go Main && cd Main && go build . 2> ../userStderr.txt"
+		submit.executeCmd = "./Main/Main < testcase.txt > userStdout.txt 2> userStderr.txt"
 		submit.fileName = "Main.go"
+	case "nim":
+		submit.compileCmd = "nim cpp -d:release --opt:speed --multimethods:on -o:Main.out Main.nim"
+		submit.executeCmd = "./Main.out < testcase.txt > userStdout.txt 2> userStderr.txt"
+		submit.fileName = "Main.nim"
+	case "rust_114":
+		submit.compileCmd = "rustc -O -o Main.out Main.rs"
+		submit.executeCmd = "./Main.out < testcase.txt > userStdout.txt 2> userStderr.txt"
+		submit.fileName = "Main.rs"
 	}
-
 }
 
 func validationCheck(args submitGORM) string {
@@ -559,7 +579,7 @@ func main() {
 	}
 	for {
 		res := []submitGORM{}
-		db.Table("users").Where("status='WR' OR status='WJ'").Find(&res)
+		db.Table("users").Where("status='WR' OR status='WJ'").Order("updated_at").Find(&res)
 		for i := 0; i < len(res); i++ {
 			if res[i].Status == "" || res[i].SessionID == "" {
 				println("NaaN")
@@ -570,6 +590,9 @@ func main() {
 				//fmt.Printf("%s has already existed\n", res[i].SessionID)
 				continue
 			} else {
+				// wait untill maxJudge isn't equal to now
+				for now == maxJudge {
+				}
 				fmt.Printf("id:%s status:%s\n", res[i].SessionID, res[i].Status)
 				cmdChickets.channel[res[i].SessionID] = make(chan cmdResultJSON)
 				go judge(res[i], &tftpCli, &cmdChickets.channel)
