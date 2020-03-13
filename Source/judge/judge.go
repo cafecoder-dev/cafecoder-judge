@@ -510,7 +510,7 @@ func langConfig(submit *submitT) {
 		submit.executeCmd = "mono Main.exe < testcase.txt > userStdout.txt 2> userStderr.txt"
 		submit.fileName = "Main.cs"
 	case "cs_dotnet31":
-		submit.compileCmd = "mkdir Main && mv Main.cs Main && cd Main && dotnet new console 2> userStderr.txt && dotnet publish -o . 2> userStderr.txt"
+		submit.compileCmd = "mkdir Main && mv Main.cs Main && cd Main && dotnet new console 2> ../userStderr.txt && dotnet publish -o . > ../userStderr.txt"
 		submit.executeCmd = "dotnet ./Main/Main.dll > userStdout.txt 2> userStderr.txt"
 		submit.fileName = "Main.cs"
 	case "go_114": //golang
@@ -590,10 +590,11 @@ func main() {
 				//fmt.Printf("%s has already existed\n", res[i].SessionID)
 				continue
 			} else {
-				// wait untill maxJudge isn't equal to now
+				// wait untill ${maxJudge} isn't equal to ${now}
 				for now == maxJudge {
 				}
-				fmt.Printf("id:%s status:%s\n", res[i].SessionID, res[i].Status)
+				now++
+				fmt.Printf("id:%s status:%s now:%d\n", res[i].SessionID, res[i].Status, now)
 				cmdChickets.channel[res[i].SessionID] = make(chan cmdResultJSON)
 				go judge(res[i], &tftpCli, &cmdChickets.channel)
 			}
