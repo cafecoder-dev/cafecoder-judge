@@ -9,6 +9,8 @@ import (
 	"os"
 	"os/exec"
 	"time"
+
+	"github.com/struCoder/pidusage"
 )
 
 const (
@@ -17,10 +19,11 @@ const (
 )
 
 type cmdResultJSON struct {
-	SessionID  string `json:"sessionID"`
-	Result     bool   `json:"result"`
-	ErrMessage string `json:"errMessage"`
-	Time       int64  `json:"time"`
+	SessionID  string  `json:"sessionID"`
+	Result     bool    `json:"result"`
+	ErrMessage string  `json:"errMessage"`
+	Time       int64   `json:"time"`
+	MemUsage   float64 `json:"memUsage"`
 }
 
 type requestJSON struct {
@@ -76,6 +79,8 @@ func executeJudge(request requestJSON) {
 			fmt.Println("start exception")
 			cmdResult.ErrMessage += "start exception\n"
 		}
+		info, _ := pidusage.GetStat(cmd.Process.Pid)
+		cmdResult.MemUsage = info.Memory
 		done := make(chan error)
 		go func() { done <- cmd.Wait() }()
 		timeout := time.After(2 * time.Second)

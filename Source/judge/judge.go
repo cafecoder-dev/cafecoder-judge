@@ -43,10 +43,11 @@ type cmdChicket struct {
 }
 
 type cmdResultJSON struct {
-	SessionID  string `json:"sessionID"`
-	Time       int64  `json:"time"`
-	Result     bool   `json:"result"`
-	ErrMessage string `json:"errMessage"`
+	SessionID  string  `json:"sessionID"`
+	Time       int64   `json:"time"`
+	Result     bool    `json:"result"`
+	ErrMessage string  `json:"errMessage"`
+	MemUsage   float64 `json:"memUsage"`
 }
 
 type requestJSON struct {
@@ -67,10 +68,10 @@ type resultJSON struct {
 }
 
 type testcaseJSON struct {
-	Name       string `json:"name"`
-	Result     string `json:"result"`
-	MemoryUsed int64  `json:"memory_used"`
-	Time       int64  `json:"time"`
+	Name     string  `json:"name"`
+	Result   string  `json:"result"`
+	MemUsage float64 `json:"memUsage"`
+	Time     int64   `json:"time"`
 }
 
 type submitGORM struct {
@@ -333,6 +334,7 @@ func tryTestcase(submit *submitT, sessionIDChan *chan cmdResultJSON) error {
 		}
 
 		submit.result.Testcases[i].Time = recv.Time
+		submit.result.Testcases[i].MemUsage = recv.MemUsage
 
 		stdoutLines := strings.Split(stdoutBuf.String(), "\n")
 		stderrLines := strings.Split(stderrBuf.String(), "\n")
