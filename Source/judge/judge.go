@@ -520,11 +520,11 @@ func langConfig(submit *submitT) {
 		submit.executeCmd = "./Main/Main < testcase.txt > userStdout.txt 2> userStderr.txt"
 		submit.fileName = "Main.go"
 	case "nim":
-		submit.compileCmd = "nim cpp -d:release --opt:speed --multimethods:on -o:Main.out Main.nim"
+		submit.compileCmd = "nim cpp -d:release --opt:speed --multimethods:on -o:Main.out Main.nim 2> userStderr.txt"
 		submit.executeCmd = "./Main.out < testcase.txt > userStdout.txt 2> userStderr.txt"
 		submit.fileName = "Main.nim"
 	case "rust_114":
-		submit.compileCmd = "rustc -O -o Main.out Main.rs"
+		submit.compileCmd = "export PATH=\"$HOME/.cargo/bin:$PATH\" 2> userStderr.txt && rustc -O -o Main.out Main.rs 2> userStderr.txt"
 		submit.executeCmd = "./Main.out < testcase.txt > userStdout.txt 2> userStderr.txt"
 		submit.fileName = "Main.rs"
 	}
