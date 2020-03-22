@@ -2,7 +2,6 @@ package main
 
 import (
 	"archive/tar"
-	"bufio"
 	"bytes"
 	"context"
 	"crypto/sha256"
@@ -14,6 +13,7 @@ import (
 	"net"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -43,11 +43,11 @@ type cmdChicket struct {
 }
 
 type cmdResultJSON struct {
-	SessionID  string  `json:"sessionID"`
-	Time       int64   `json:"time"`
-	Result     bool    `json:"result"`
-	ErrMessage string  `json:"errMessage"`
-	MemUsage   float64 `json:"memUsage"`
+	SessionID  string `json:"sessionID"`
+	Time       int    `json:"time"`
+	Result     bool   `json:"result"`
+	ErrMessage string `json:"errMessage"`
+	MemUsage   int    `json:"memUsage"`
 }
 
 type requestJSON struct {
@@ -57,37 +57,36 @@ type requestJSON struct {
 	DirName   string `json:"dirName"`
 }
 
-type resultJSON struct {
-	SessionID  string                     `json:"sessionID"`
-	Time       int64                      `json:"time"`
-	Result     string                     `json:"result"`
-	Score      int                        `json:"score"`
-	ErrMessage string                     `json:"errMessage"`
-	TestcaseN  int                        `json:"testcaseN"` //
-	Testcases  [maxTestcaseN]testcaseJSON `json:"testcases"`
+type resultGORM struct {
+	Status          string `gorm:"column:status"`
+	ExecutionTime   int    `gorm:"column:execution_time"`
+	ExecutionMemory int    `gorm:"column:execution_memory"`
 }
 
-type testcaseJSON struct {
-	Name     string  `json:"name"`
-	Result   string  `json:"result"`
-	MemUsage float64 `json:"memUsage"`
-	Time     int64   `json:"time"`
+type testcaseResultsGORM struct {
+	SubmitID        int64  `gorm:"column:submit_id"`
+	TestcaseID      int64  `gorm:"column:testcase_id"`
+	Status          string `gorm:"column:status"`
+	ExecutionTime   int    `gorm:"column:execution_time"`
+	ExecutionMemory int    `gorm:"column:execution_memory"`
+}
+
+type testcaseGORM struct {
+	Input  string `gorm:"column:input"`
+	Output string `gorm:"column:output"`
 }
 
 type submitGORM struct {
-	Status       string `gorm:"column:status"`
-	UsercodePath string `gorm:"column:usercodePath"`
-	SessionID    string `gorm:"column:sessionID"`
-	Language     string `gorm:"column:language"`
-	TestcasePath string `gorm:"column:testcasePath"`
-	ProblemID    string `gorm:"column:problemID"`
+	ID        int64  `gorm:"column:id"`
+	ProblemID int64  `gorm:"column:problem_id"`
+	Path      string `gorm:"column:path"`
+	Lang      string `gorm:"column:lang"`
 }
 
 type submitT struct {
-	sessionID       string
-	usercodePath    string
-	lang            string
-	testcaseDirPath string
+	info            submitGORM
+	result          resultGORM
+	testcaseResults []testcaseResultsGORM
 
 	dirName      string
 	execDirPath  string
@@ -95,8 +94,6 @@ type submitT struct {
 	fileName     string
 	compileCmd   string
 	executeCmd   string
-
-	result resultJSON
 
 	code             []byte
 	containerCli     *client.Client
@@ -159,56 +156,55 @@ func sendResult(submit submitT) {
 
 	os.RemoveAll("cafecoderUsers/" + submit.dirName)
 	fmt.Println("submit result")
-	submit.result.SessionID = submit.sessionID
-	if priorityMap[submit.result.Result] < 6 {
-		submit.result.Result = "AC"
-		for i := 0; i < submit.result.TestcaseN; i++ {
-			fmt.Printf("i:%d %s\n", i, submit.result.Testcases[i].Result)
-			if priorityMap[submit.result.Testcases[i].Result] > priorityMap[submit.result.Result] {
-				submit.result.Result = submit.result.Testcases[i].Result
+	if priorityMap[submit.result.Status] < 6 {
+		submit.result.Status = "AC"
+		for i := 0; i < len(submit.testcaseResults); i++ {
+			fmt.Printf("i:%d %s\n", i, submit.testcaseResults[i].Status)
+			if priorityMap[submit.testcaseResults[i].Status] > priorityMap[submit.result.Status] {
+				submit.result.Status = submit.testcaseResults[i].Status
 			}
-			if submit.result.Testcases[i].Time > submit.result.Time {
-				submit.result.Time = submit.result.Testcases[i].Time
+			if submit.testcaseResults[i].ExecutionTime > submit.result.ExecutionTime {
+				submit.result.ExecutionTime = submit.testcaseResults[i].ExecutionTime
 			}
 		}
 	} else {
-		submit.result.ErrMessage = base64.StdEncoding.EncodeToString([]byte(submit.errorBuffer.String()))
+		//submit.result.ErrMessage = base64.StdEncoding.EncodeToString([]byte(submit.errorBuffer.String()))
 	}
 
 	db, err := sqlConnect()
 	if err != nil {
 		fmt.Println(err.Error())
 	}
-	db.Table("users").Where("sessionID=?", submit.sessionID).Update("status", submit.result.Result)
+	db.
+		Table("submits").
+		Where("sessionID=? AND WHERE deleted_at IS NULL", strconv.FormatInt(submit.info.ID, 10)).
+		Update(&submit.result)
+
 	now--
 }
 
 func judge(args submitGORM, tftpCli **tftp.Client, cmdChickets *map[string]chan cmdResultJSON) {
 	var submit = submitT{errorBuffer: new(bytes.Buffer), resultBuffer: new(bytes.Buffer)}
 
-	submit.sessionID = args.SessionID
-
 	errMessage := validationCheck(args)
 	if errMessage != "" {
 		fmt.Printf("%s\n", errMessage)
-		submit.result.Result = "IE"
+		submit.result.Status = "IE"
 		sendResult(submit)
 		return
 	}
 
-	submit.usercodePath = args.UsercodePath
-	submit.lang = args.Language
-	submit.testcaseDirPath = args.TestcasePath
-	sessionIDChan := (*cmdChickets)[submit.sessionID]
-	defer func() { delete((*cmdChickets), submit.sessionID) }()
-	hash := sha256.Sum256([]byte(submit.sessionID))
+	submit.info = args
+	sessionIDChan := (*cmdChickets)[strconv.FormatInt(submit.info.ID, 10)]
+	defer func() { delete((*cmdChickets), strconv.FormatInt(submit.info.ID, 10)) }()
+	hash := sha256.Sum256([]byte(strconv.FormatInt(submit.info.ID, 10)))
 	submit.dirName = hex.EncodeToString(hash[:])
 
 	langConfig(&submit)
 
 	/*todo: なんとかする*/
 	//submit.code = tftpwrapper.DownloadFromPath(tftpCli, submit.usercodePath)
-	submit.code, _ = ioutil.ReadFile(submit.usercodePath)
+	submit.code, _ = ioutil.ReadFile(submit.info.Path)
 
 	os.Mkdir("cafecoderUsers/"+submit.dirName, 0777)
 	file, _ := os.Create("cafecoderUsers/" + submit.dirName + "/" + submit.dirName)
@@ -218,7 +214,7 @@ func judge(args submitGORM, tftpCli **tftp.Client, cmdChickets *map[string]chan 
 	err := createContainer(&submit)
 	if err != nil {
 		fmt.Printf("container:%s\n", err.Error())
-		submit.result.Result = "IE"
+		submit.result.Status = "IE"
 		sendResult(submit)
 		return
 	}
@@ -232,25 +228,25 @@ func judge(args submitGORM, tftpCli **tftp.Client, cmdChickets *map[string]chan 
 	)
 	if err != nil {
 		fmt.Printf("%s\n", err.Error())
-		submit.result.Result = "IE"
+		submit.result.Status = "IE"
 		sendResult(submit)
 		return
 	}
 
 	err = compile(&submit, &sessionIDChan)
 	if err != nil {
-		submit.result.Result = "IE"
+		submit.result.Status = "IE"
 		sendResult(submit)
 		return
 	}
-	if submit.result.Result == "CE" {
+	if submit.result.Status == "CE" {
 		sendResult(submit)
 		return
 	}
 
 	err = tryTestcase(&submit, &sessionIDChan)
 	if err != nil {
-		submit.result.Result = "IE"
+		submit.result.Status = "IE"
 		sendResult(submit)
 		return
 	}
@@ -269,7 +265,7 @@ func compile(submit *submitT, sessionIDchan *chan cmdResultJSON) error {
 	}
 	if !recv.Result {
 		fmt.Printf("%s CE\n", recv.ErrMessage)
-		submit.result.Result = "CE"
+		submit.result.Status = "CE"
 		return nil
 	}
 	println("compile done")
@@ -278,35 +274,33 @@ func compile(submit *submitT, sessionIDchan *chan cmdResultJSON) error {
 
 func tryTestcase(submit *submitT, sessionIDChan *chan cmdResultJSON) error {
 	var (
-		TLEcase      bool
-		testcaseName string
+		TLEcase bool
 	)
-	testcaseListFile, err := os.Open(submit.testcaseDirPath + "/testcase_list.txt")
+	db, err := sqlConnect()
 	if err != nil {
-		fmt.Printf("failed to open %s/testcase_list.txt\n", submit.testcaseDirPath)
-		return err
+		fmt.Fprintf(os.Stderr, "%s\n", err)
 	}
-	sc := bufio.NewScanner(testcaseListFile)
-	for sc.Scan() {
-		submit.result.Testcases[submit.result.TestcaseN].Name = strings.TrimSpace(sc.Text())
-		submit.result.TestcaseN++
-	}
-	testcaseListFile.Close()
+	testcases := []testcaseGORM{}
+	db.
+		Table("testcases").
+		Where("problem_id=? deleted_at IS NULL", strconv.FormatInt(submit.info.ProblemID, 10)).
+		Find(&testcases)
 
-	fmt.Printf("N=%d\n", submit.result.TestcaseN)
-	for i := 0; i < submit.result.TestcaseN; i++ {
+	for i := 0; i < len(testcases); i++ {
 		if TLEcase {
-			submit.result.Testcases[i].Result = "-"
+			submit.testcaseResults[i].Status = "-"
 			continue
 		}
-		testcaseName = submit.result.Testcases[i].Name
-		outputTestcase, err := ioutil.ReadFile(submit.testcaseDirPath + "/out/" + testcaseName)
+
+		file, err := os.Create("cafecoderUsers/" + submit.dirName + "/testcase.txt")
 		if err != nil {
-			println("readfile error")
-			return err
+			fmt.Println(err)
 		}
+		file.Write(([]byte)(testcases[i].Input))
+		file.Close()
+
 		err = tarCopy(
-			submit.testcaseDirPath+"/in/"+testcaseName,
+			"cafecoderUsers/"+submit.dirName+"/testcase.txt",
 			"/testcase.txt",
 			0744,
 			*submit,
@@ -333,33 +327,38 @@ func tryTestcase(submit *submitT, sessionIDChan *chan cmdResultJSON) error {
 			return err
 		}
 
-		submit.result.Testcases[i].Time = recv.Time
-		submit.result.Testcases[i].MemUsage = recv.MemUsage
+		submit.testcaseResults[i].ExecutionTime = recv.Time
+		submit.testcaseResults[i].ExecutionTime = recv.MemUsage
 
 		stdoutLines := strings.Split(stdoutBuf.String(), "\n")
 		stderrLines := strings.Split(stderrBuf.String(), "\n")
-		outputTestcaseLines := strings.Split(string(outputTestcase), "\n")
+		outputTestcaseLines := strings.Split(string(testcases[i].Output), "\n")
 
-		if submit.result.Testcases[i].Time > 2000 {
-			submit.result.Testcases[i].Result = "TLE"
+		if recv.Time > 2000 {
+			submit.testcaseResults[i].Status = "TLE"
 			TLEcase = true
 		} else {
 			if !recv.Result && stdoutBuf.String() != "" {
 				for j := 0; j < len(stderrLines); j++ {
 					println(stderrLines[j])
 				}
-				submit.result.Testcases[i].Result = "RE"
+				submit.testcaseResults[i].Status = "RE"
 			} else {
-				submit.result.Testcases[i].Result = "WA"
+				submit.testcaseResults[i].Status = "WA"
 				for j := 0; j < len(stdoutLines) && j < len(outputTestcaseLines); j++ {
-					submit.result.Testcases[i].Result = "AC"
+					submit.testcaseResults[i].Status = "AC"
 					if strings.TrimSpace(string(stdoutLines[j])) != strings.TrimSpace(string(outputTestcaseLines[j])) {
-						submit.result.Testcases[i].Result = "WA"
+						submit.testcaseResults[i].Status = "WA"
 						break
 					}
 				}
 			}
 		}
+		db.
+			Table("testcase_results").
+			Where("problem_id=? AND deleted_at IS NULL", strconv.FormatInt(submit.info.ProblemID, 10)).
+			Create(&submit.testcaseResults)
+
 		//fmt.Printf("i:%d result:%s\n", i, submit.result.Testcases[i].Result)
 	}
 	return nil
@@ -369,7 +368,7 @@ func copyFromContainer(filepath string, submit submitT) (*bytes.Buffer, error) {
 	var buffer *bytes.Buffer
 	reader, _, err := submit.containerCli.CopyFromContainer(
 		context.TODO(),
-		submit.sessionID,
+		strconv.FormatInt(submit.info.ID, 10),
 		filepath,
 	)
 	if err != nil {
@@ -430,7 +429,7 @@ func requestCmd(cmd string, mode string, submit submitT, sessionIDChan *chan cmd
 	}
 
 	request.Cmd = cmd
-	request.SessionID = submit.sessionID
+	request.SessionID = strconv.FormatInt(submit.info.ID, 10)
 	request.Mode = mode
 	b, err := json.Marshal(request)
 	if err != nil {
@@ -442,7 +441,7 @@ func requestCmd(cmd string, mode string, submit submitT, sessionIDChan *chan cmd
 	containerConn.Close()
 	for {
 		recv = <-*sessionIDChan
-		if recv.SessionID == submit.sessionID {
+		if recv.SessionID == strconv.FormatInt(submit.info.ID, 10) {
 			break
 		}
 	}
@@ -455,7 +454,7 @@ func removeContainer(submit submitT) {
 	_ = submit.containerCli.ContainerRemove(context.Background(), submit.containerID, types.ContainerRemoveOptions{RemoveVolumes: true, RemoveLinks: true, Force: true})
 	labelFilters := filters.NewArgs()
 	submit.containerCli.ContainersPrune(context.Background(), labelFilters)
-	fmt.Println("container " + submit.sessionID + " removed")
+	fmt.Println("container " + strconv.FormatInt(submit.info.ID, 10) + " removed")
 }
 
 func createContainer(submit *submitT) error {
@@ -467,7 +466,7 @@ func createContainer(submit *submitT) error {
 	}
 
 	config := &container.Config{Image: "cafecoder"}
-	resp, err := submit.containerCli.ContainerCreate(context.TODO(), config, nil, nil, submit.sessionID)
+	resp, err := submit.containerCli.ContainerCreate(context.TODO(), config, nil, nil, strconv.FormatInt(submit.info.ID, 10))
 	if err != nil {
 		return err
 	}
@@ -486,7 +485,7 @@ func createContainer(submit *submitT) error {
 }
 
 func langConfig(submit *submitT) {
-	switch submit.lang {
+	switch submit.info.Lang {
 	case "c17_gcc9": //C11
 		submit.compileCmd = "gcc-9 Main.c -O2 -lm -std=gnu17 -o Main.out 2> userStderr.txt"
 		submit.executeCmd = "./Main.out < testcase.txt > userStdout.txt 2> userStderr.txt"
@@ -531,24 +530,13 @@ func langConfig(submit *submitT) {
 }
 
 func validationCheck(args submitGORM) string {
-	if !checkRegexp(`[(A-Za-z0-9\./_\/)]*`, args.Language) {
+	if !checkRegexp(`[(A-Za-z0-9\./_\/)]*`, args.Lang) {
 		return "Inputs are included another characters[0-9],[a-z],[A-Z],'.','/','_'"
 	}
-	if !checkRegexp(`[(A-Za-z0-9\./_\/)]*`, args.ProblemID) {
+	if !checkRegexp(`[(A-Za-z0-9\./_\/)]*`, args.Path) {
 		return "Inputs are included another characters[0-9],[a-z],[A-Z],'.','/','_'"
 	}
-	if !checkRegexp(`[(A-Za-z0-9\./_\/)]*`, args.SessionID) {
-		return "Inputs are included another characters[0-9],[a-z],[A-Z],'.','/','_'"
-	}
-	if !checkRegexp(`[(A-Za-z0-9\./_\/)]*`, args.Status) {
-		return "Inputs are included another characters[0-9],[a-z],[A-Z],'.','/','_'"
-	}
-	if !checkRegexp(`[(A-Za-z0-9\./_\/)]*`, args.TestcasePath) {
-		return "Inputs are included another characters[0-9],[a-z],[A-Z],'.','/','_'"
-	}
-	if !checkRegexp(`[(A-Za-z0-9\./_\/)]*`, args.UsercodePath) {
-		return "Inputs are included another characters[0-9],[a-z],[A-Z],'.','/','_'"
-	}
+
 	return ""
 }
 
@@ -583,12 +571,7 @@ func main() {
 		res := []submitGORM{}
 		db.Table("users").Where("status='WR' OR status='WJ'").Order("updated_at").Find(&res)
 		for i := 0; i < len(res); i++ {
-			if res[i].Status == "" || res[i].SessionID == "" {
-				println("NaaN")
-				break
-			}
-
-			if _, exist := cmdChickets.channel[res[i].SessionID]; exist {
+			if _, exist := cmdChickets.channel[strconv.FormatInt(res[i].ID, 10)]; exist {
 				//fmt.Printf("%s has already existed\n", res[i].SessionID)
 				continue
 			} else {
@@ -596,8 +579,8 @@ func main() {
 				for now == maxJudge {
 				}
 				now++
-				fmt.Printf("id:%s status:%s now:%d\n", res[i].SessionID, res[i].Status, now)
-				cmdChickets.channel[res[i].SessionID] = make(chan cmdResultJSON)
+				fmt.Printf("id:%lld now:%d\n", res[i].ID, now)
+				cmdChickets.channel[strconv.FormatInt(res[i].ID, 10)] = make(chan cmdResultJSON)
 				go judge(res[i], &tftpCli, &cmdChickets.channel)
 			}
 		}
