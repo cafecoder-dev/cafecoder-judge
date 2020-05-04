@@ -37,7 +37,7 @@ const (
 
 var now int
 
-type cmdChicket struct {
+type cmdTicket struct {
 	sync.Mutex
 	channel map[string]chan cmdResultJSON
 }
@@ -121,14 +121,14 @@ func passResultTCP(submit submitT, hostAndPort string) {
 	}
 	passStr := strings.Trim(submit.resultBuffer.String(), "\n")
 	fmt.Println(passStr)
-	conn.Write([]byte(passStr))
-	conn.Close()
+	_, _ = conn.Write([]byte(passStr))
+	_ = conn.Close()
 }
 
-func manageCmds(cmdChickets *cmdChicket) {
+func manageCmds(cmdChickets *cmdTicket) {
 	listen, err := net.Listen("tcp", "0.0.0.0:3344")
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "%s\n", err)
+		_, _ = fmt.Fprintf(os.Stderr, "%s\n", err)
 	}
 
 	for {
@@ -138,8 +138,8 @@ func manageCmds(cmdChickets *cmdChicket) {
 		}
 		go func() {
 			var cmdResult cmdResultJSON
-			json.NewDecoder(cnct).Decode(&cmdResult)
-			cnct.Close()
+			_ = json.NewDecoder(cnct).Decode(&cmdResult)
+			_ = cnct.Close()
 			println("connection closed")
 			data, _ := base64.StdEncoding.DecodeString(cmdResult.ErrMessage)
 			fmt.Println(string(data))
@@ -154,7 +154,7 @@ func manageCmds(cmdChickets *cmdChicket) {
 func sendResult(submit submitT) {
 	priorityMap := map[string]int{"AC": 0, "WA": 1, "-": 2, "TLE": 3, "RE": 4, "MLE": 5, "CE": 6, "IE": 7}
 
-	os.RemoveAll("cafecoderUsers/" + submit.dirName)
+	_ = os.RemoveAll("cafecoderUsers/" + submit.dirName)
 	fmt.Println("submit result")
 	if priorityMap[submit.result.Status] < 6 {
 		submit.result.Status = "AC"
@@ -206,10 +206,10 @@ func judge(args submitGORM, tftpCli **tftp.Client, cmdChickets *map[string]chan 
 	//submit.code = tftpwrapper.DownloadFromPath(tftpCli, submit.usercodePath)
 	submit.code, _ = ioutil.ReadFile(submit.info.Path)
 
-	os.Mkdir("cafecoderUsers/"+submit.dirName, 0777)
+	_ = os.Mkdir("cafecoderUsers/"+submit.dirName, 0777)
 	file, _ := os.Create("cafecoderUsers/" + submit.dirName + "/" + submit.dirName)
-	file.Write(submit.code)
-	file.Close()
+	_, _ = file.Write(submit.code)
+	_ = file.Close()
 
 	err := createContainer(&submit)
 	if err != nil {
@@ -278,7 +278,7 @@ func tryTestcase(submit *submitT, sessionIDChan *chan cmdResultJSON) error {
 	)
 	db, err := sqlConnect()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "%s\n", err)
+		_, _ = fmt.Fprintf(os.Stderr, "%s\n", err)
 	}
 	testcases := []testcaseGORM{}
 	db.
@@ -296,8 +296,8 @@ func tryTestcase(submit *submitT, sessionIDChan *chan cmdResultJSON) error {
 		if err != nil {
 			fmt.Println(err)
 		}
-		file.Write(([]byte)(testcases[i].Input))
-		file.Close()
+		_, _ = file.Write(([]byte)(testcases[i].Input))
+		_ = file.Close()
 
 		err = tarCopy(
 			"cafecoderUsers/"+submit.dirName+"/testcase.txt",
@@ -376,9 +376,9 @@ func copyFromContainer(filepath string, submit submitT) (*bytes.Buffer, error) {
 	}
 	defer reader.Close()
 	tr := tar.NewReader(reader)
-	tr.Next()
+	_, _ = tr.Next()
 	buffer = new(bytes.Buffer)
-	buffer.ReadFrom(tr)
+	_, _ = buffer.ReadFrom(tr)
 
 	return buffer, nil
 }
@@ -401,8 +401,8 @@ func tarCopy(hostFilePath string, containerFilePath string, mode int64, submit s
 			Size: int64(len(content)),
 		},
 	)
-	tw.Write(content)
-	tw.Close()
+	_, _ = tw.Write(content)
+	_ = tw.Close()
 	err = submit.containerCli.CopyToContainer(
 		context.TODO(),
 		submit.containerID,
@@ -413,7 +413,7 @@ func tarCopy(hostFilePath string, containerFilePath string, mode int64, submit s
 	if err != nil {
 		return err
 	}
-	usercodeFile.Close()
+	_ = usercodeFile.Close()
 	fmt.Printf("copy to container done\n")
 	return nil
 }
@@ -437,8 +437,8 @@ func requestCmd(cmd string, mode string, submit submitT, sessionIDChan *chan cmd
 	}
 	fmt.Println(request)
 
-	containerConn.Write(b)
-	containerConn.Close()
+	_, _ = containerConn.Write(b)
+	_ = containerConn.Close()
 	for {
 		recv = <-*sessionIDChan
 		if recv.SessionID == strconv.FormatInt(submit.info.ID, 10) {
@@ -453,7 +453,7 @@ func removeContainer(submit submitT) {
 	_ = submit.containerCli.ContainerStop(context.Background(), submit.containerID, nil)
 	_ = submit.containerCli.ContainerRemove(context.Background(), submit.containerID, types.ContainerRemoveOptions{RemoveVolumes: true, RemoveLinks: true, Force: true})
 	labelFilters := filters.NewArgs()
-	submit.containerCli.ContainersPrune(context.Background(), labelFilters)
+	_, _ = submit.containerCli.ContainersPrune(context.Background(), labelFilters)
 	fmt.Println("container " + strconv.FormatInt(submit.info.ID, 10) + " removed")
 }
 
@@ -541,41 +541,41 @@ func validationCheck(args submitGORM) string {
 }
 
 func sqlConnect() (database *gorm.DB, err error) {
-	bytes, err := ioutil.ReadFile("pswd.txt")
+	fileBytes, err := ioutil.ReadFile("pswd.txt")
 	if err != nil {
 		panic(err)
 	}
 
 	DBMS := "mysql"
-	USER := "earlgray283"
-	PASS := string(bytes)
-	PROTOCOL := "tcp(localhost)"
-	DBNAME := "cafecoder"
+	USER := "root"
+	PASS := string(fileBytes)
+	PROTOCOL := "tcp(localhost:3306)"
+	DBNAME := "cafecoder_back_rails_development"
 
 	CONNECT := USER + ":" + PASS + "@" + PROTOCOL + "/" + DBNAME + "?charset=utf8&parseTime=true&loc=Asia%2FTokyo"
 	return gorm.Open(DBMS, CONNECT)
 }
 
 func main() {
-	cmdChickets := cmdChicket{channel: make(map[string]chan cmdResultJSON)}
+	cmdChickets := cmdTicket{channel: make(map[string]chan cmdResultJSON)}
 	go manageCmds(&cmdChickets)
 	db, err := sqlConnect()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "%s\n", err)
+		_, _ = fmt.Fprintf(os.Stderr, "%s\n", err)
 	}
 	tftpCli, err := tftp.NewClient()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "%s\n", err)
+		_, _ = fmt.Fprintf(os.Stderr, "%s\n", err)
 	}
 	for {
-		res := []submitGORM{}
-		db.Table("users").Where("status='WR' OR status='WJ'").Order("updated_at").Find(&res)
+		var res []submitGORM
+		db.Table("submits").Where("status='WR' OR status='WJ'").Order("updated_at").Find(&res)
 		for i := 0; i < len(res); i++ {
 			if _, exist := cmdChickets.channel[strconv.FormatInt(res[i].ID, 10)]; exist {
 				//fmt.Printf("%s has already existed\n", res[i].SessionID)
 				continue
 			} else {
-				// wait untill ${maxJudge} isn't equal to ${now}
+				// wait until ${maxJudge} isn't equal to ${now}
 				for now == maxJudge {
 				}
 				now++
