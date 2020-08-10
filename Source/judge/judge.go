@@ -484,6 +484,10 @@ func createContainer(submit *submitT) error {
 	return nil
 }
 
+func getSourceCode(path string) {
+	
+}
+
 func langConfig(submit *submitT) {
 	switch submit.info.Lang {
 	case "c17_gcc9": //C11
