@@ -1,10 +1,6 @@
-.gdb_history
-core
-executeUsercode
-judge
+/executeUsercode
+/judge
 log
 nohup.out
-peda-session-dockerd.txt
-/test
-test/testcase
-pswd.txt
+/pswd.txt
+/key.json

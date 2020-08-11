@@ -57,13 +57,16 @@ func readError(cmdResult *cmdResultJSON) {
 	if err != nil {
 		cmdResult.ErrMessage = err.Error()
 	}
+
 	buf := make([]byte, 65536)
 	buf, err = ioutil.ReadAll(stderrFp)
 	if err != nil {
 		cmdResult.ErrMessage = err.Error()
 		return
 	}
+
 	cmdResult.ErrMessage += base64.StdEncoding.EncodeToString(buf) + "\n"
+	
 	stderrFp.Close()
 }
 
