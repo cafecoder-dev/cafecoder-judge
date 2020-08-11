@@ -1,34 +1,30 @@
-FROM ubuntu:18.04
+FROM ubuntu:20.04
 #install compilers
 RUN \
 apt update && \
-apt-get install software-properties-common apt-transport-https dirmngr -y && \
-apt install curl wget -y && \
+apt install software-properties-common apt-transport-https dirmngr curl wget -y && \
 # C#(mono) install
-apt install -y wget gnupg ca-certificates && \
+apt install gnupg ca-certificates -y && \
 yes | apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 3FA7E0328081BFF6A14DA29AA6A19B38D3D831EF && \
-echo "deb https://download.mono-project.com/repo/ubuntu vs-bionic main" | tee /etc/apt/sources.list.d/mono-official-vs.list && \
+echo "deb https://download.mono-project.com/repo/ubuntu stable-focal main" | tee /etc/apt/sources.list.d/mono-official-stable.list && \
 apt update && \
-apt-get install monodevelop -y && \
+apt install mono-devel -y && \
 # C#(.NET) install
-wget -q https://packages.microsoft.com/config/ubuntu/18.04/packages-microsoft-prod.deb -O packages-microsoft-prod.deb && \
+wget https://packages.microsoft.com/config/ubuntu/20.04/packages-microsoft-prod.deb -O packages-microsoft-prod.deb && \
 dpkg -i packages-microsoft-prod.deb && \
-add-apt-repository universe && \
-apt-get update && \
-apt-get install apt-transport-https -y && \
+apt update && \
 apt-get update && \
 apt-get install dotnet-sdk-3.1 -y && \
+apt-get install -y aspnetcore-runtime-3.1 && \
 # C/C++ install
-add-apt-repository ppa:ubuntu-toolchain-r/test && \
-apt-get update && \
-apt-get install g++-9-multilib -y && \
+apt-get install g++-10 gcc-10 -y && \
 # Java11 install
 apt install default-jdk -y && \
 # Python3 install
 apt install python3 -y && \
 # go install
-wget https://dl.google.com/go/go1.14.linux-amd64.tar.gz && \
-tar -C /usr/local -xzf go1.14.linux-amd64.tar.gz && \
+wget https://golang.org/dl/go1.14.7.linux-amd64.tar.gz && \
+tar -C /usr/local -xzf go1.14.7.linux-amd64.tar.gz && \
 export PATH=$PATH:/usr/local/go/bin &&  \
 # Rust install
 curl https://sh.rustup.rs -sSf | sh -s -- -y

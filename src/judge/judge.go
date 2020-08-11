@@ -34,11 +34,11 @@ import (
 )
 
 const (
-	/*BackendHostPort ... backend's IP-address and port-number*/
-	//BackendHostPort = "133.130.101.250:5963"
-	BackendHostPort = "localhost:5963"
-	maxTestcaseN    = 50
-	/*maxJudge ... Max number judge can execute at the same time*/
+	BackendIP = "150.95.142.220"
+	// BackendIP = "localhost"
+	BackendPort = "9922"
+
+	maxTestcaseN = 50
 	maxJudge = 20
 )
 
@@ -113,6 +113,17 @@ type submitT struct {
 
 	resultBuffer *bytes.Buffer
 	errorBuffer  *bytes.Buffer
+}
+
+func validationCheck(args submitGORM) string {
+	if !checkRegexp(`[(A-Za-z0-9\./_\/)]*`, args.Lang) {
+		return "Inputs are included another characters[0-9],[a-z],[A-Z],'.','/','_'"
+	}
+	if !checkRegexp(`[(A-Za-z0-9\./_\/)]*`, args.Path) {
+		return "Inputs are included another characters[0-9],[a-z],[A-Z],'.','/','_'"
+	}
+
+	return ""
 }
 
 func checkRegexp(reg, str string) bool {
@@ -374,13 +385,15 @@ func copyFromContainer(filepath string, submit submitT) (*bytes.Buffer, error) {
 	var buffer *bytes.Buffer
 	reader, _, err := submit.containerCli.CopyFromContainer(
 		context.TODO(),
-		strconv.FormatInt(submit.info.ID, 10),
+		fmt.Sprintf("%d", submit.info.ID),
 		filepath,
 	)
 	if err != nil {
 		return buffer, err
 	}
+
 	defer reader.Close()
+
 	tr := tar.NewReader(reader)
 	_, _ = tr.Next()
 	buffer = new(bytes.Buffer)
@@ -586,16 +599,7 @@ func langConfig(submit *submitT) error {
 
 }
 
-func validationCheck(args submitGORM) string {
-	if !checkRegexp(`[(A-Za-z0-9\./_\/)]*`, args.Lang) {
-		return "Inputs are included another characters[0-9],[a-z],[A-Z],'.','/','_'"
-	}
-	if !checkRegexp(`[(A-Za-z0-9\./_\/)]*`, args.Path) {
-		return "Inputs are included another characters[0-9],[a-z],[A-Z],'.','/','_'"
-	}
 
-	return ""
-}
 
 func sqlConnect() (database *gorm.DB, err error) {
 	fileBytes, err := ioutil.ReadFile("pswd.txt")
@@ -607,7 +611,7 @@ func sqlConnect() (database *gorm.DB, err error) {
 	USER := "root"
 	PASS := string(fileBytes)
 
-	PROTOCOL := "tcp(localhost:3306)"
+	PROTOCOL := "tcp(" + BackendIP + ":3306)"
 	DBNAME := "cafecoder_development"
 
 	CONNECT := USER + ":" + PASS + "@" + PROTOCOL + "/" + DBNAME + "?charset=utf8&parseTime=true&loc=Asia%2FTokyo"
