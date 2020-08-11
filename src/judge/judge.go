@@ -39,7 +39,7 @@ const (
 	BackendPort = "9922"
 
 	maxTestcaseN = 50
-	maxJudge = 20
+	maxJudge     = 20
 )
 
 var now int
@@ -154,7 +154,9 @@ func manageCmds(cmdChickets *cmdTicket) {
 			fmt.Println(string(data))
 			cmdResult.ErrMessage = string(data)
 			go func() {
+				(*cmdChickets).Lock()
 				(*cmdChickets).channel[cmdResult.SessionID] <- cmdResult
+				(*cmdChickets).Unlock()
 			}()
 		}()
 	}
@@ -187,14 +189,18 @@ func sendResult(submit submitT) {
 		fmt.Println(err.Error())
 	}
 	defer db.Close()
+
+	fmt.Println(submit.result)
+
 	db.
 		Table("submits").
-		Where("id=? AND deleted_at IS NULL", fmt.Sprintf("%d", submit.info.ID)).
+		Where("id=? AND deleted_at IS NULL", submit.info.ID).
 		Update(&submit.result)
+
 	now--
 }
 
-func judge(args submitGORM, tftpCli **tftp.Client, cmdChickets *map[string]chan cmdResultJSON) {
+func judge(args submitGORM, tftpCli **tftp.Client, cmdChickets *cmdTicket) {
 	var submit = submitT{errorBuffer: new(bytes.Buffer), resultBuffer: new(bytes.Buffer)}
 
 	errMessage := validationCheck(args)
@@ -207,8 +213,15 @@ func judge(args submitGORM, tftpCli **tftp.Client, cmdChickets *map[string]chan 
 
 	submit.info = args
 	id := fmt.Sprintf("%d", submit.info.ID) // submit.info.ID を文字列に変換
-	sessionIDChan := (*cmdChickets)[id]
-	defer func() { delete((*cmdChickets), id) }()
+	(*cmdChickets).Lock()
+	sessionIDChan := (*cmdChickets).channel[id]
+	(*cmdChickets).Unlock()
+	defer func() {
+		(*cmdChickets).Lock()
+		delete((*cmdChickets).channel, id)
+		(*cmdChickets).Unlock()
+	}()
+
 
 	// dir name はハッシュです
 	hash := sha256.Sum256([]byte(id))
@@ -221,10 +234,17 @@ func judge(args submitGORM, tftpCli **tftp.Client, cmdChickets *map[string]chan 
 		return
 	}
 
-	codePath := saveSourceCode(submit)
+	codePath, err := saveSourceCode(submit)
+	if err != nil {
+		fmt.Printf("%s\n", err.Error())
+		submit.result.Status = "IE"
+		sendResult(submit)
+		return
+	}
+
 	submit.codePath = codePath
 
-	err := createContainer(&submit)
+	err = createContainer(&submit)
 	if err != nil {
 		fmt.Printf("[ERROR] container: %s\n", err.Error())
 		submit.result.Status = "IE"
@@ -510,28 +530,27 @@ func createContainer(submit *submitT) error {
 	return nil
 }
 
-func saveSourceCode(submit submitT) string {
+func saveSourceCode(submit submitT) (string, error) {
 	credentialFilePath := "./key.json"
 
 	ctx := context.Background()
 	client, err := storage.NewClient(ctx, option.WithCredentialsFile(credentialFilePath))
 	if err != nil {
-		log.Fatal(err)
+		return "", err
 	}
 
 	var fileName = strings.Split(submit.info.Path, "/")[1]
 	savePath := "./codes/" + fileName
 	fp, err := os.Create(savePath)
 	if err != nil {
-		log.Fatal(err)
+		return "", err
 	}
 
 	bucket := "cafecoder-submit-source"
 	obj := client.Bucket(bucket).Object(submit.info.Path)
 	reader, err := obj.NewReader(ctx)
 	if err != nil {
-		println(err.Error())
-		sendResult(submit)
+		return "", err
 	}
 	defer reader.Close()
 
@@ -540,12 +559,12 @@ func saveSourceCode(submit submitT) string {
 	for s.Scan() {
 	}
 	if err := s.Err(); err != nil {
-		log.Fatal(err)
+		return "", err
 	}
 
 	println("save done id: " + fmt.Sprintf("%d", submit.info.ID))
 
-	return savePath
+	return savePath, nil
 }
 
 func langConfig(submit *submitT) error {
@@ -599,8 +618,6 @@ func langConfig(submit *submitT) error {
 
 }
 
-
-
 func sqlConnect() (database *gorm.DB, err error) {
 	fileBytes, err := ioutil.ReadFile("pswd.txt")
 	if err != nil {
@@ -635,19 +652,25 @@ func main() {
 		var res []submitGORM
 		db.Table("submits").Where("status='WR' OR status='WJ'").Order("updated_at").Find(&res)
 		for i := 0; i < len(res); i++ {
-			if _, exist := cmdChickets.channel[fmt.Sprintf("%d", res[i].ID)]; exist {
-				//fmt.Printf("%s has already existed\n", res[i].SessionID)
+			cmdChickets.Lock()
+			_, exist := cmdChickets.channel[fmt.Sprintf("%d", res[i].ID)];
+			cmdChickets.Unlock()
+
+			if exist {
 				continue
 			} else {
 				// wait until ${maxJudge} isn't equal to ${now}
 				for now == maxJudge {
 				}
-				now++  
+				now++
 
 				fmt.Printf("id:%d now:%d\n", res[i].ID, now)
 
+				cmdChickets.Lock()
 				cmdChickets.channel[strconv.FormatInt(res[i].ID, 10)] = make(chan cmdResultJSON)
-				go judge(res[i], &tftpCli, &cmdChickets.channel)
+				cmdChickets.Unlock()
+				
+				go judge(res[i], &tftpCli, &cmdChickets)
 			}
 		}
 	}
