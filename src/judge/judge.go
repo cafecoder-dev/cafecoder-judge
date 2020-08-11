@@ -27,6 +27,7 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/client"
+	"github.com/joho/godotenv"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jinzhu/gorm"
 	"google.golang.org/api/option"
@@ -34,15 +35,11 @@ import (
 )
 
 const (
-	BackendIP = "150.95.142.220"
-	// BackendIP = "localhost"
-	BackendPort = "9922"
-
 	maxTestcaseN = 50
 	maxJudge     = 20
 )
 
-var now int
+var now int // セキュアじゃないからなんとかしよう
 
 type cmdTicket struct {
 	sync.Mutex
@@ -190,8 +187,6 @@ func sendResult(submit submitT) {
 	}
 	defer db.Close()
 
-	fmt.Println(submit.result)
-
 	db.
 		Table("submits").
 		Where("id=? AND deleted_at IS NULL", submit.info.ID).
@@ -213,15 +208,16 @@ func judge(args submitGORM, tftpCli **tftp.Client, cmdChickets *cmdTicket) {
 
 	submit.info = args
 	id := fmt.Sprintf("%d", submit.info.ID) // submit.info.ID を文字列に変換
+
 	(*cmdChickets).Lock()
 	sessionIDChan := (*cmdChickets).channel[id]
 	(*cmdChickets).Unlock()
+
 	defer func() {
 		(*cmdChickets).Lock()
 		delete((*cmdChickets).channel, id)
 		(*cmdChickets).Unlock()
 	}()
-
 
 	// dir name はハッシュです
 	hash := sha256.Sum256([]byte(id))
@@ -278,7 +274,7 @@ func judge(args submitGORM, tftpCli **tftp.Client, cmdChickets *cmdTicket) {
 		sendResult(submit)
 		return
 	}
-	println("test done")
+	println("judge done")
 
 	sendResult(submit)
 
@@ -308,7 +304,7 @@ func tryTestcase(submit *submitT, sessionIDChan *chan cmdResultJSON) error {
 
 	db, err := sqlConnect()
 	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "%s\n", err)
+		fmt.Fprintf(os.Stderr, "%s\n", err)
 	}
 	defer db.Close()
 
@@ -325,12 +321,10 @@ func tryTestcase(submit *submitT, sessionIDChan *chan cmdResultJSON) error {
 			continue
 		}
 
-		file, err := os.Create("./codes/" + submit.hashedID)
-		if err != nil {
-			log.Fatal(err)
-		}
-		_, _ = file.Write(([]byte)(testcases[i].Input))
-		_ = file.Close()
+		file, _ := os.Create("./codes/" + submit.hashedID)
+
+		file.Write(([]byte)(testcases[i].Input))
+		file.Close()
 
 		if err = tarCopy("./codes/"+submit.hashedID, "/testcase.txt", 0744, *submit); err != nil {
 			println("tar copy error")
@@ -354,12 +348,15 @@ func tryTestcase(submit *submitT, sessionIDChan *chan cmdResultJSON) error {
 			return err
 		}
 
-		submit.testcaseResults[i].TestcaseID = testcases[i].TestcaseID
-		submit.testcaseResults[i].ExecutionTime = recv.Time
-		submit.testcaseResults[i].ExecutionMemory = recv.MemUsage
+		submit.testcaseResults[i] = testcaseResultsGORM{
+			TestcaseID:      testcases[i].TestcaseID,
+			ExecutionTime:   recv.Time,
+			ExecutionMemory: recv.MemUsage,
+		}
 
 		stdoutLines := strings.Split(stdoutBuf.String(), "\n")
 		stderrLines := strings.Split(stderrBuf.String(), "\n")
+
 		outputTestcaseLines := strings.Split(string(testcases[i].Output), "\n")
 
 		if recv.Time > 2000 {
@@ -386,6 +383,12 @@ func tryTestcase(submit *submitT, sessionIDChan *chan cmdResultJSON) error {
 		submit.testcaseResults[i].SubmitID = submit.info.ID
 		submit.testcaseResults[i].CreatedAt = timeToString(time.Now())
 		submit.testcaseResults[i].UpdatedAt = timeToString(time.Now())
+
+		submit.testcaseResults[i] = testcaseResultsGORM{
+			SubmitID:  submit.info.ID,
+			CreatedAt: timeToString(time.Now()),
+			UpdatedAt: timeToString(time.Now()),
+		}
 
 		if submit.info.Status == "WR" {
 			db.
@@ -614,30 +617,36 @@ func langConfig(submit *submitT) error {
 	default:
 		err = errors.New("undefined language")
 	}
-	return err
 
+	return err
 }
 
 func sqlConnect() (database *gorm.DB, err error) {
-	fileBytes, err := ioutil.ReadFile("pswd.txt")
-	if err != nil {
-		panic(err)
+	if err = godotenv.Load("./.env"); err != nil {
+		println("?")
+		return nil, err
 	}
-
+	
 	DBMS := "mysql"
-	USER := "root"
-	PASS := string(fileBytes)
-
-	PROTOCOL := "tcp(" + BackendIP + ":3306)"
-	DBNAME := "cafecoder_development"
+	DBNAME := "p6jav_cafecoder_prod"
+	USER := os.Getenv("DB_USER")
+	PASS := os.Getenv("DB_PASS")
+	HOST := os.Getenv("DB_HOST")
+	PORT := os.Getenv("DB_PORT")
+	
+	PROTOCOL := fmt.Sprintf("tcp(%s:%s)", HOST, PORT)
 
 	CONNECT := USER + ":" + PASS + "@" + PROTOCOL + "/" + DBNAME + "?charset=utf8&parseTime=true&loc=Asia%2FTokyo"
+	println(CONNECT)
+
 	return gorm.Open(DBMS, CONNECT)
 }
 
 func main() {
 	cmdChickets := cmdTicket{channel: make(map[string]chan cmdResultJSON)}
+
 	go manageCmds(&cmdChickets)
+
 	db, err := sqlConnect()
 	if err != nil {
 		log.Fatal(err)
@@ -653,7 +662,7 @@ func main() {
 		db.Table("submits").Where("status='WR' OR status='WJ'").Order("updated_at").Find(&res)
 		for i := 0; i < len(res); i++ {
 			cmdChickets.Lock()
-			_, exist := cmdChickets.channel[fmt.Sprintf("%d", res[i].ID)];
+			_, exist := cmdChickets.channel[fmt.Sprintf("%d", res[i].ID)]
 			cmdChickets.Unlock()
 
 			if exist {
@@ -664,12 +673,12 @@ func main() {
 				}
 				now++
 
-				fmt.Printf("id:%d now:%d\n", res[i].ID, now)
+				// fmt.Printf("id:%d now:%d\n", res[i].ID, now)
 
 				cmdChickets.Lock()
 				cmdChickets.channel[strconv.FormatInt(res[i].ID, 10)] = make(chan cmdResultJSON)
 				cmdChickets.Unlock()
-				
+
 				go judge(res[i], &tftpCli, &cmdChickets)
 			}
 		}

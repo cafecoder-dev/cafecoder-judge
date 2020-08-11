@@ -4,3 +4,4 @@ log
 nohup.out
 /pswd.txt
 /key.json
+/.env
