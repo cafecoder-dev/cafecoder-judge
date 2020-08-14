@@ -27,9 +27,9 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/client"
-	"github.com/joho/godotenv"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jinzhu/gorm"
+	"github.com/joho/godotenv"
 	"google.golang.org/api/option"
 	"pack.ag/tftp"
 )
@@ -247,7 +247,7 @@ func judge(args submitGORM, tftpCli **tftp.Client, cmdChickets *cmdTicket) {
 		sendResult(submit)
 		return
 	}
-	defer removeContainer(submit)
+	//defer removeContainer(submit)
 
 	if err := tarCopy(codePath, submit.fileName, 0777, submit); err != nil {
 		fmt.Printf("%s\n", err.Error())
@@ -337,21 +337,15 @@ func tryTestcase(submit *submitT, sessionIDChan *chan cmdResultJSON) error {
 			return err
 		}
 
-		stdoutBuf, err := copyFromContainer("userStdout.txt", *submit)
+		stdoutBuf, err := copyFromContainer("/userStdout.txt", *submit)
 		if err != nil {
 			println(err.Error())
 			return err
 		}
-		stderrBuf, err := copyFromContainer("userStderr.txt", *submit)
+		stderrBuf, err := copyFromContainer("/userStderr.txt", *submit)
 		if err != nil {
 			println(err.Error())
 			return err
-		}
-
-		submit.testcaseResults[i] = testcaseResultsGORM{
-			TestcaseID:      testcases[i].TestcaseID,
-			ExecutionTime:   recv.Time,
-			ExecutionMemory: recv.MemUsage,
 		}
 
 		stdoutLines := strings.Split(stdoutBuf.String(), "\n")
@@ -380,16 +374,15 @@ func tryTestcase(submit *submitT, sessionIDChan *chan cmdResultJSON) error {
 			}
 		}
 
+		submit.testcaseResults[i].TestcaseID = testcases[i].TestcaseID
+		submit.testcaseResults[i].ExecutionTime = recv.Time
+		submit.testcaseResults[i].ExecutionMemory = recv.MemUsage
 		submit.testcaseResults[i].SubmitID = submit.info.ID
 		submit.testcaseResults[i].CreatedAt = timeToString(time.Now())
 		submit.testcaseResults[i].UpdatedAt = timeToString(time.Now())
+	}
 
-		submit.testcaseResults[i] = testcaseResultsGORM{
-			SubmitID:  submit.info.ID,
-			CreatedAt: timeToString(time.Now()),
-			UpdatedAt: timeToString(time.Now()),
-		}
-
+	for i := 0; i < len(testcases); i++ {
 		if submit.info.Status == "WR" {
 			db.
 				Where("submit_id = ? AND testcase_id = ?", submit.info.ID, testcases[i].TestcaseID).
@@ -408,7 +401,7 @@ func copyFromContainer(filepath string, submit submitT) (*bytes.Buffer, error) {
 	var buffer *bytes.Buffer
 	reader, _, err := submit.containerCli.CopyFromContainer(
 		context.TODO(),
-		fmt.Sprintf("%d", submit.info.ID),
+		submit.containerID,
 		filepath,
 	)
 	if err != nil {
@@ -515,7 +508,8 @@ func createContainer(submit *submitT) error {
 	}
 
 	config := &container.Config{Image: "cafecoder"}
-	resp, err := submit.containerCli.ContainerCreate(context.TODO(), config, nil, nil, nil, strconv.FormatInt(submit.info.ID, 10))
+
+	resp, err := submit.containerCli.ContainerCreate(context.TODO(), config, nil, nil, nil, submit.hashedID)
 	if err != nil {
 		return err
 	}
@@ -574,23 +568,23 @@ func langConfig(submit *submitT) error {
 	var err error
 	err = nil
 	switch submit.info.Lang {
-	case "c11_gcc7": //C11
-		submit.compileCmd = "gcc-9 Main.c -O2 -lm -std=gnu17 -o Main.out 2> userStderr.txt"
+	case "c17_gcc10": //C11
+		submit.compileCmd = "gcc-10 Main.c -O2 -lm -std=gnu17 -o Main.out 2> userStderr.txt"
 		submit.executeCmd = "./Main.out < testcase.txt > userStdout.txt 2> userStderr.txt"
 		submit.fileName = "Main.c"
-	case "cpp17_gcc7": //C++17
-		submit.compileCmd = "g++-9 Main.cpp -O2 -lm -std=gnu++17 -o Main.out 2> userStderr.txt"
+	case "cpp17_gcc10": //C++17
+		submit.compileCmd = "g++-10 Main.cpp -O2 -lm -std=gnu++17 -o Main.out 2> userStderr.txt"
 		submit.executeCmd = "./Main.out < testcase.txt > userStdout.txt 2> userStderr.txt"
 		submit.fileName = "Main.cpp"
-	case "cpp20_gcc7": //C++17
-		submit.compileCmd = "g++-9 Main.cpp -O2 -lm -std=gnu++2a -o Main.out 2> userStderr.txt"
+	case "cpp20_gcc10": //C++17
+		submit.compileCmd = "g++-10 Main.cpp -O2 -lm -std=gnu++2a -o Main.out 2> userStderr.txt"
 		submit.executeCmd = "./Main.out < testcase.txt > userStdout.txt 2> userStderr.txt"
 		submit.fileName = "Main.cpp"
 	case "java11": //java8
 		submit.compileCmd = "javac Main.java 2> userStderr.txt"
 		submit.executeCmd = "java Main < testcase.txt > userStdout.txt 2> userStderr.txt"
 		submit.fileName = "Main.java"
-	case "python36": //python3
+	case "python38": //python3
 		submit.compileCmd = "python3 -m py_compile Main.py 2> userStderr.txt"
 		submit.executeCmd = "python3 Main.py < testcase.txt > userStdout.txt 2> userStderr.txt"
 		submit.fileName = "Main.py"
@@ -610,7 +604,7 @@ func langConfig(submit *submitT) error {
 		submit.compileCmd = "nim cpp -d:release --opt:speed --multimethods:on -o:Main.out Main.nim 2> userStderr.txt"
 		submit.executeCmd = "./Main.out < testcase.txt > userStdout.txt 2> userStderr.txt"
 		submit.fileName = "Main.nim"
-	case "rust_114":
+	case "rust_115":
 		submit.compileCmd = "export PATH=\"$HOME/.cargo/bin:$PATH\" 2> userStderr.txt && rustc -O -o Main.out Main.rs 2> userStderr.txt"
 		submit.executeCmd = "./Main.out < testcase.txt > userStdout.txt 2> userStderr.txt"
 		submit.fileName = "Main.rs"
@@ -626,18 +620,17 @@ func sqlConnect() (database *gorm.DB, err error) {
 		println("?")
 		return nil, err
 	}
-	
+
 	DBMS := "mysql"
 	DBNAME := "p6jav_cafecoder_prod"
 	USER := os.Getenv("DB_USER")
 	PASS := os.Getenv("DB_PASS")
 	HOST := os.Getenv("DB_HOST")
 	PORT := os.Getenv("DB_PORT")
-	
+
 	PROTOCOL := fmt.Sprintf("tcp(%s:%s)", HOST, PORT)
 
 	CONNECT := USER + ":" + PASS + "@" + PROTOCOL + "/" + DBNAME + "?charset=utf8&parseTime=true&loc=Asia%2FTokyo"
-	println(CONNECT)
 
 	return gorm.Open(DBMS, CONNECT)
 }

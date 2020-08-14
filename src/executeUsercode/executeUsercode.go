@@ -76,14 +76,14 @@ func executeJudge(request requestJSON) {
 	//exec.Command("sh", "-c", "ls > userStdout.txt").Run()
 	if request.Mode == "judge" {
 		cmd := exec.Command("sh", "-c", request.Cmd)
-		start := time.Now().UnixNano()
+		start := time.Now()
 		err := cmd.Start()
 		if err != nil {
 			fmt.Println("start exception")
 			cmdResult.ErrMessage += "start exception\n"
 		}
 		info, _ := pidusage.GetStat(cmd.Process.Pid)
-		cmdResult.MemUsage = info.Memory
+		cmdResult.MemUsage = info.Memory / 1024.0
 		done := make(chan error)
 		go func() { done <- cmd.Wait() }()
 		timeout := time.After(2 * time.Second)
@@ -99,8 +99,9 @@ func executeJudge(request requestJSON) {
 				cmdResult.ErrMessage += "exception\n"
 			}
 		}
-		end := time.Now().UnixNano()
-		cmdResult.Time = (end - start) / int64(time.Millisecond)
+		end := time.Now()
+		cmdResult.Time = (end.Sub(start)).Milliseconds()
+	
 		if err != nil {
 			cmdResult.Result = false
 		} else {
