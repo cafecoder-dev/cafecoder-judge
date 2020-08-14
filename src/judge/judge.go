@@ -122,24 +122,24 @@ type SubmitT struct {
 	containerCli     *client.Client
 	containerID      string
 	containerInspect types.ContainerJSON
-
-	resultBuffer *bytes.Buffer
-	errorBuffer  *bytes.Buffer
 }
 
-func validationCheck(args SubmitGORM) string {
-	if !checkRegexp(`[(A-Za-z0-9\./_\/)]*`, args.Lang) {
-		return "Inputs are included another characters[0-9],[a-z],[A-Z],'.','/','_'"
+func validationCheck(args SubmitGORM) bool {
+	if !checkRegexp(`[(A-Za-z0-9\./_\/)]*`, args.Lang) || !checkRegexp(`[(A-Za-z0-9\./_\/)]*`, args.Path)  {
+		return false
 	}
-	if !checkRegexp(`[(A-Za-z0-9\./_\/)]*`, args.Path) {
-		return "Inputs are included another characters[0-9],[a-z],[A-Z],'.','/','_'"
-	}
-
-	return ""
+	return true
+	//"Inputs are included another characters[0-9],[a-z],[A-Z],'.','/','_'"
 }
 
 func checkRegexp(reg, str string) bool {
-	return regexp.MustCompile(reg).Match([]byte(str))
+	compiled, err := regexp.Compile(reg)
+	if err != nil {
+		fmt.Println(err)
+		return false
+	}
+
+	return compiled.Match([]byte(str))
 }
 
 func timeToString(t time.Time) string {
@@ -175,10 +175,9 @@ func manageCmds(cmdChickets *CmdTicket) {
 }
 
 func sendResult(submit SubmitT) {
-	priorityMap := map[string]int{"AC": 0, "WA": 1, "-": 2, "TLE": 3, "RE": 4, "MLE": 5, "CE": 6, "IE": 7}
+	priorityMap := map[string]int{"-": 0, "AC": 1, "WA": 2, "TLE": 3, "RE": 4, "MLE": 5, "CE": 6, "IE": 7}
 
-	os.Remove(submit.codePath)
-	os.Remove("./codes/" + submit.hashedID)
+	
 
 	if priorityMap[submit.result.Status] < 6 {
 		submit.result.Status = "AC"
@@ -203,7 +202,7 @@ func sendResult(submit SubmitT) {
 	defer db.Close()
 
 	submit.result.Point = int(scoring(submit))
-		db.
+	db.
 		Table("submits").
 		Where("id=? AND deleted_at IS NULL", submit.info.ID).
 		Update(&submit.result)
@@ -253,19 +252,17 @@ func scoring(submit SubmitT) int64 {
 }
 
 func judge(args SubmitGORM, tftpCli **tftp.Client, cmdChickets *CmdTicket) {
-	var submit = SubmitT{errorBuffer: new(bytes.Buffer), resultBuffer: new(bytes.Buffer)}
+	var submit = SubmitT{}
 
-	errMessage := validationCheck(args)
-	if errMessage != "" {
-		fmt.Printf("%s\n", errMessage)
+	if !validationCheck(args) {
 		submit.result.Status = "IE"
 		sendResult(submit)
 		return
 	}
 
 	submit.info = args
-	id := fmt.Sprintf("%d", submit.info.ID) // submit.info.ID を文字列に変換
 
+	id := fmt.Sprintf("%d", submit.info.ID) // submit.info.ID を文字列に変換
 	(*cmdChickets).Lock()
 	sessionIDChan := (*cmdChickets).channel[id]
 	(*cmdChickets).Unlock()
@@ -276,9 +273,12 @@ func judge(args SubmitGORM, tftpCli **tftp.Client, cmdChickets *CmdTicket) {
 		(*cmdChickets).Unlock()
 	}()
 
-	// dir name はハッシュです
-	hash := sha256.Sum256([]byte(id))
-	submit.hashedID = hex.EncodeToString(hash[:])
+	submit.hashedID = makeStringHash(id)
+
+	defer func() {
+		os.Remove(submit.codePath)
+		os.Remove("./codes/" + submit.hashedID)
+	}()
 
 	if err := langConfig(&submit); err != nil {
 		println(err.Error())
@@ -352,6 +352,11 @@ func compile(submit *SubmitT, sessionIDchan *chan CmdResultJSON) error {
 	}
 
 	return nil
+}
+
+func makeStringHash(str string) string {
+	hash := sha256.Sum256([]byte(str))
+	return hex.EncodeToString(hash[:])
 }
 
 func tryTestcase(submit *SubmitT, sessionIDChan *chan CmdResultJSON) error {
