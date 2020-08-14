@@ -247,7 +247,7 @@ func judge(args submitGORM, tftpCli **tftp.Client, cmdChickets *cmdTicket) {
 		sendResult(submit)
 		return
 	}
-	//defer removeContainer(submit)
+	defer removeContainer(submit)
 
 	if err := tarCopy(codePath, submit.fileName, 0777, submit); err != nil {
 		fmt.Printf("%s\n", err.Error())
