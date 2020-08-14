@@ -1,6 +1,6 @@
 module github.com/cafecoder-dev/cafecoder-judge
 
-go 1.14
+go 1.15
 
 require (
 	cloud.google.com/go/storage v1.10.0

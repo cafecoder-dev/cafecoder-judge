@@ -35,8 +35,7 @@ import (
 )
 
 const (
-	maxTestcaseN = 50
-	maxJudge     = 20
+	maxJudge = 20
 )
 
 // judgeNumberLimit limits the number of judges
@@ -44,12 +43,12 @@ const (
 // see: https://mattn.kaoriya.net/software/lang/go/20171221111857.htm
 var judgeNumberLimit = make(chan struct{}, maxJudge)
 
-type cmdTicket struct {
+type CmdTicket struct {
 	sync.Mutex
-	channel map[string]chan cmdResultJSON
+	channel map[string]chan CmdResultJSON
 }
 
-type cmdResultJSON struct {
+type CmdResultJSON struct {
 	SessionID  string `json:"sessionID"`
 	Time       int    `json:"time"`
 	Result     bool   `json:"result"`
@@ -57,20 +56,21 @@ type cmdResultJSON struct {
 	MemUsage   int    `json:"memUsage"`
 }
 
-type requestJSON struct {
+type RequestJSON struct {
 	SessionID string `json:"sessionID"`
 	Cmd       string `json:"cmd"`
 	Mode      string `json:"mode"` //Mode ... "judge" or "other"
 	DirName   string `json:"dirName"`
 }
 
-type resultGORM struct {
+type ResultGORM struct {
 	Status          string `gorm:"column:status"`
 	ExecutionTime   int    `gorm:"column:execution_time"`
 	ExecutionMemory int    `gorm:"column:execution_memory"`
+	Point           int    `gorm:"column:point"` // int64 にしたほうがいいかもしれない(カラムにあわせて int にした)
 }
 
-type testcaseResultsGORM struct {
+type TestcaseResultsGORM struct {
 	SubmitID        int64  `gorm:"column:submit_id"`
 	TestcaseID      int64  `gorm:"column:testcase_id"`
 	Status          string `gorm:"column:status"`
@@ -80,24 +80,36 @@ type testcaseResultsGORM struct {
 	UpdatedAt       string `gorm:"column:updated_at"`
 }
 
-type testcaseGORM struct {
+type TestcaseGORM struct {
 	TestcaseID int64  `gorm:"column:id"`
 	Input      string `gorm:"column:input"`
 	Output     string `gorm:"column:output"`
 }
 
-type submitGORM struct {
+type SubmitGORM struct {
 	ID        int64  `gorm:"column:id"`
-	Status    string `gorm:"status"`
+	Status    string `gorm:"column:status"`
 	ProblemID int64  `gorm:"column:problem_id"`
 	Path      string `gorm:"column:path"`
 	Lang      string `gorm:"column:lang"`
 }
 
-type submitT struct {
-	info            submitGORM
-	result          resultGORM
-	testcaseResults [128]testcaseResultsGORM
+type TestcaseSetsGORM struct {
+	ID     int64 `gorm:"column:id"`
+	Points int   `gorm:"column:points"`
+}
+
+type TestcaseTestcaseSetsGORM struct {
+	TestcaseID int64 `gorm:"column:testcase_id"`
+}
+
+type SubmitT struct {
+	info   SubmitGORM
+	result ResultGORM
+
+	firstIndex      int64
+	testcases       []TestcaseGORM
+	testcaseResults []TestcaseResultsGORM
 
 	hashedID     string
 	execDirPath  string
@@ -115,7 +127,7 @@ type submitT struct {
 	errorBuffer  *bytes.Buffer
 }
 
-func validationCheck(args submitGORM) string {
+func validationCheck(args SubmitGORM) string {
 	if !checkRegexp(`[(A-Za-z0-9\./_\/)]*`, args.Lang) {
 		return "Inputs are included another characters[0-9],[a-z],[A-Z],'.','/','_'"
 	}
@@ -134,7 +146,7 @@ func timeToString(t time.Time) string {
 	return t.Format("2006-01-02 15:04:05")
 }
 
-func manageCmds(cmdChickets *cmdTicket) {
+func manageCmds(cmdChickets *CmdTicket) {
 	listen, err := net.Listen("tcp", "0.0.0.0:3344")
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "%s\n", err)
@@ -146,7 +158,7 @@ func manageCmds(cmdChickets *cmdTicket) {
 			continue //continue to receive request
 		}
 		go func() {
-			var cmdResult cmdResultJSON
+			var cmdResult CmdResultJSON
 			_ = json.NewDecoder(cnct).Decode(&cmdResult)
 			_ = cnct.Close()
 			println("connection closed")
@@ -162,7 +174,7 @@ func manageCmds(cmdChickets *cmdTicket) {
 	}
 }
 
-func sendResult(submit submitT) {
+func sendResult(submit SubmitT) {
 	priorityMap := map[string]int{"AC": 0, "WA": 1, "-": 2, "TLE": 3, "RE": 4, "MLE": 5, "CE": 6, "IE": 7}
 
 	os.Remove(submit.codePath)
@@ -190,7 +202,8 @@ func sendResult(submit submitT) {
 	}
 	defer db.Close()
 
-	db.
+	submit.result.Point = int(scoring(submit))
+		db.
 		Table("submits").
 		Where("id=? AND deleted_at IS NULL", submit.info.ID).
 		Update(&submit.result)
@@ -198,8 +211,49 @@ func sendResult(submit submitT) {
 	<-judgeNumberLimit
 }
 
-func judge(args submitGORM, tftpCli **tftp.Client, cmdChickets *cmdTicket) {
-	var submit = submitT{errorBuffer: new(bytes.Buffer), resultBuffer: new(bytes.Buffer)}
+func scoring(submit SubmitT) int64 {
+	db, err := sqlConnect()
+	if err != nil {
+		fmt.Println(err.Error())
+	}
+	defer db.Close()
+
+	var (
+		testcaseSets         []TestcaseSetsGORM
+		testcaseTestcaseSets []TestcaseTestcaseSetsGORM
+	)
+
+	db.
+		Table("testcase_sets").
+		Where("problem_id=?", submit.info.ProblemID).
+		Find(&testcaseSets)
+
+	score := int64(0)
+	for _, elem := range testcaseSets {
+		flg := true
+
+		db.
+			Table("testcase_testcase_sets").
+			Where("testcase_set_id=?", elem.ID).
+			Find(&testcaseTestcaseSets)
+
+		for _, elem2 := range testcaseTestcaseSets {
+			if submit.testcaseResults[elem2.TestcaseID-submit.firstIndex].Status != "AC" {
+				flg = false
+				break
+			}
+		}
+
+		if flg {
+			score += int64(elem.Points)
+		}
+	}
+
+	return score
+}
+
+func judge(args SubmitGORM, tftpCli **tftp.Client, cmdChickets *CmdTicket) {
+	var submit = SubmitT{errorBuffer: new(bytes.Buffer), resultBuffer: new(bytes.Buffer)}
 
 	errMessage := validationCheck(args)
 	if errMessage != "" {
@@ -284,7 +338,7 @@ func judge(args submitGORM, tftpCli **tftp.Client, cmdChickets *cmdTicket) {
 	return
 }
 
-func compile(submit *submitT, sessionIDchan *chan cmdResultJSON) error {
+func compile(submit *SubmitT, sessionIDchan *chan CmdResultJSON) error {
 	recv, err := requestCmd(submit.compileCmd, "other", *submit, sessionIDchan)
 	if err != nil {
 		fmt.Printf("%s\n", err.Error())
@@ -300,7 +354,7 @@ func compile(submit *submitT, sessionIDchan *chan cmdResultJSON) error {
 	return nil
 }
 
-func tryTestcase(submit *submitT, sessionIDChan *chan cmdResultJSON) error {
+func tryTestcase(submit *SubmitT, sessionIDChan *chan CmdResultJSON) error {
 	var (
 		TLEcase bool
 	)
@@ -311,11 +365,15 @@ func tryTestcase(submit *submitT, sessionIDChan *chan cmdResultJSON) error {
 	}
 	defer db.Close()
 
-	testcases := []testcaseGORM{}
+	testcases := []TestcaseGORM{}
 	db.
 		Table("testcases").
 		Where("problem_id=? AND deleted_at IS NULL", strconv.FormatInt(submit.info.ProblemID, 10)).
+		Order("id").
 		Find(&testcases)
+
+	submit.firstIndex = testcases[0].TestcaseID
+	submit.testcases = testcases
 
 	for i := 0; i < len(testcases); i++ {
 		// skip
@@ -400,7 +458,7 @@ func tryTestcase(submit *submitT, sessionIDChan *chan cmdResultJSON) error {
 	return nil
 }
 
-func copyFromContainer(filepath string, submit submitT) (*bytes.Buffer, error) {
+func copyFromContainer(filepath string, submit SubmitT) (*bytes.Buffer, error) {
 	var buffer *bytes.Buffer
 	reader, _, err := submit.containerCli.CopyFromContainer(
 		context.TODO(),
@@ -422,7 +480,7 @@ func copyFromContainer(filepath string, submit submitT) (*bytes.Buffer, error) {
 }
 
 // コンテナにコードコピーしてる
-func tarCopy(hostFilePath string, containerFilePath string, mode int64, submit submitT) error {
+func tarCopy(hostFilePath string, containerFilePath string, mode int64, submit SubmitT) error {
 	var buf bytes.Buffer
 
 	usercodeFile, err := os.Open(hostFilePath)
@@ -461,10 +519,10 @@ func tarCopy(hostFilePath string, containerFilePath string, mode int64, submit s
 	return nil
 }
 
-func requestCmd(cmd string, mode string, submit submitT, sessionIDChan *chan cmdResultJSON) (cmdResultJSON, error) {
+func requestCmd(cmd string, mode string, submit SubmitT, sessionIDChan *chan CmdResultJSON) (CmdResultJSON, error) {
 	var (
-		request requestJSON
-		recv    cmdResultJSON
+		request RequestJSON
+		recv    CmdResultJSON
 	)
 
 	containerConn, err := net.Dial("tcp", submit.containerInspect.NetworkSettings.IPAddress+":8887")
@@ -494,7 +552,7 @@ func requestCmd(cmd string, mode string, submit submitT, sessionIDChan *chan cmd
 	return recv, nil
 }
 
-func removeContainer(submit submitT) {
+func removeContainer(submit SubmitT) {
 	_ = submit.containerCli.ContainerStop(context.Background(), submit.containerID, nil)
 	_ = submit.containerCli.ContainerRemove(context.Background(), submit.containerID, types.ContainerRemoveOptions{RemoveVolumes: true, RemoveLinks: true, Force: true})
 	labelFilters := filters.NewArgs()
@@ -502,7 +560,7 @@ func removeContainer(submit submitT) {
 	fmt.Println("container: " + submit.containerID + " removed")
 }
 
-func createContainer(submit *submitT) error {
+func createContainer(submit *SubmitT) error {
 	var err error
 	submit.containerCli, err = client.NewClientWithOpts(client.WithVersion("1.35"))
 	defer submit.containerCli.Close()
@@ -530,7 +588,7 @@ func createContainer(submit *submitT) error {
 	return nil
 }
 
-func saveSourceCode(submit submitT) (string, error) {
+func saveSourceCode(submit SubmitT) (string, error) {
 	credentialFilePath := "./key.json"
 
 	ctx := context.Background()
@@ -567,7 +625,7 @@ func saveSourceCode(submit submitT) (string, error) {
 	return savePath, nil
 }
 
-func langConfig(submit *submitT) error {
+func langConfig(submit *SubmitT) error {
 	var err error
 	err = nil
 	switch submit.info.Lang {
@@ -639,7 +697,7 @@ func sqlConnect() (database *gorm.DB, err error) {
 }
 
 func main() {
-	cmdChickets := cmdTicket{channel: make(map[string]chan cmdResultJSON)}
+	cmdChickets := CmdTicket{channel: make(map[string]chan CmdResultJSON)}
 
 	go manageCmds(&cmdChickets)
 
@@ -654,7 +712,7 @@ func main() {
 	}
 
 	for {
-		var res []submitGORM
+		var res []SubmitGORM
 		db.Table("submits").Where("status='WR' OR status='WJ'").Order("updated_at").Find(&res)
 		for i := 0; i < len(res); i++ {
 			cmdChickets.Lock()
@@ -670,7 +728,7 @@ func main() {
 				// fmt.Printf("id:%d now:%d\n", res[i].ID, now)
 
 				cmdChickets.Lock()
-				cmdChickets.channel[strconv.FormatInt(res[i].ID, 10)] = make(chan cmdResultJSON)
+				cmdChickets.channel[strconv.FormatInt(res[i].ID, 10)] = make(chan CmdResultJSON)
 				cmdChickets.Unlock()
 
 				go judge(res[i], &tftpCli, &cmdChickets)
