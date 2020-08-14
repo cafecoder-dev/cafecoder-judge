@@ -39,7 +39,10 @@ const (
 	maxJudge     = 20
 )
 
-var now int // セキュアじゃないからなんとかしよう
+// judgeNumberLimit limits the number of judges
+//
+// see: https://mattn.kaoriya.net/software/lang/go/20171221111857.htm
+var judgeNumberLimit = make(chan struct{}, maxJudge)
 
 type cmdTicket struct {
 	sync.Mutex
@@ -192,7 +195,7 @@ func sendResult(submit submitT) {
 		Where("id=? AND deleted_at IS NULL", submit.info.ID).
 		Update(&submit.result)
 
-	now--
+	<-judgeNumberLimit
 }
 
 func judge(args submitGORM, tftpCli **tftp.Client, cmdChickets *cmdTicket) {
@@ -661,10 +664,8 @@ func main() {
 			if exist {
 				continue
 			} else {
-				// wait until ${maxJudge} isn't equal to ${now}
-				for now == maxJudge {
-				}
-				now++
+				// wait until the number of judges becomes less than maxJudge
+				judgeNumberLimit <- struct{}{}
 
 				// fmt.Printf("id:%d now:%d\n", res[i].ID, now)
 
