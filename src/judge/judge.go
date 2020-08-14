@@ -27,9 +27,9 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/client"
-	"github.com/joho/godotenv"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jinzhu/gorm"
+	"github.com/joho/godotenv"
 	"google.golang.org/api/option"
 	"pack.ag/tftp"
 )
@@ -39,7 +39,10 @@ const (
 	maxJudge     = 20
 )
 
-var now int // セキュアじゃないからなんとかしよう
+// judgeNumberLimit limits the number of judges
+//
+// see: https://mattn.kaoriya.net/software/lang/go/20171221111857.htm
+var judgeNumberLimit = make(chan struct{}, maxJudge)
 
 type cmdTicket struct {
 	sync.Mutex
@@ -192,7 +195,7 @@ func sendResult(submit submitT) {
 		Where("id=? AND deleted_at IS NULL", submit.info.ID).
 		Update(&submit.result)
 
-	now--
+	<-judgeNumberLimit
 }
 
 func judge(args submitGORM, tftpCli **tftp.Client, cmdChickets *cmdTicket) {
@@ -626,14 +629,14 @@ func sqlConnect() (database *gorm.DB, err error) {
 		println("?")
 		return nil, err
 	}
-	
+
 	DBMS := "mysql"
 	DBNAME := "p6jav_cafecoder_prod"
 	USER := os.Getenv("DB_USER")
 	PASS := os.Getenv("DB_PASS")
 	HOST := os.Getenv("DB_HOST")
 	PORT := os.Getenv("DB_PORT")
-	
+
 	PROTOCOL := fmt.Sprintf("tcp(%s:%s)", HOST, PORT)
 
 	CONNECT := USER + ":" + PASS + "@" + PROTOCOL + "/" + DBNAME + "?charset=utf8&parseTime=true&loc=Asia%2FTokyo"
@@ -668,10 +671,8 @@ func main() {
 			if exist {
 				continue
 			} else {
-				// wait until ${maxJudge} isn't equal to ${now}
-				for now == maxJudge {
-				}
-				now++
+				// wait until the number of judges becomes less than maxJudge
+				judgeNumberLimit <- struct{}{}
 
 				// fmt.Printf("id:%d now:%d\n", res[i].ID, now)
 
