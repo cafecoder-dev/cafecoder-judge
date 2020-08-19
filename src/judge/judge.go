@@ -251,7 +251,7 @@ func scoring(submit SubmitT) int64 {
 	db.
 		Table("testcase_testcase_sets").
 		Joins("INNER JOIN testcases ON testcase_testcase_sets.testcase_id = testcases.id").
-		Where("problem_id=? AND deleted_at IS NULL", submit.info.ProblemID).
+		Where("problem_id=? AND testcase_testcase_sets.deleted_at IS NULL", submit.info.ProblemID).
 		Find(&testcaseTestcaseSets)
 
 	// testcase_set_id -> testcase_id
@@ -412,8 +412,6 @@ func tryTestcase(submit *SubmitT, sessionIDChan *chan CmdResultJSON) error {
 		Order("id").
 		Find(&testcases).
 		Count(&testcasesNum)
-
-	fmt.Printf("testcasesNum = %d\n", len(testcases))
 
 	submit.testcases = testcases
 
