@@ -222,7 +222,8 @@ func sendResult(submit SubmitT) {
 		Table("submits").
 		Where("id=? AND deleted_at IS NULL", submit.info.ID).
 		Update(&submit.result).
-		Update("point", submit.result.Point)
+		Update("point", submit.result.Point).
+		Update("execution_memory", submit.result.ExecutionMemory)
 
 	<-judgeNumberLimit
 }
