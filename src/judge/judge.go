@@ -109,7 +109,7 @@ type SubmitT struct {
 	result ResultGORM
 
 	firstIndex         int64
-	testcases          [128]TestcaseGORM
+	testcases          []TestcaseGORM
 	testcaseResultsMap map[int64]TestcaseResultsGORM
 
 	hashedID     string
@@ -164,7 +164,7 @@ func manageCmds(cmdChickets *CmdTicket) {
 			_ = cnct.Close()
 			println("connection closed")
 			data, _ := base64.StdEncoding.DecodeString(cmdResult.ErrMessage)
-			fmt.Println(string(data))
+
 			cmdResult.ErrMessage = string(data)
 			go func() {
 				(*cmdChickets).Lock()
@@ -218,8 +218,6 @@ func sendResult(submit SubmitT) {
 
 	submit.result.Point = int(scoring(submit))
 
-	fmt.Println(submit.result)
-
 	db.
 		Table("submits").
 		Where("id=? AND deleted_at IS NULL", submit.info.ID).
@@ -253,11 +251,8 @@ func scoring(submit SubmitT) int64 {
 	db.
 		Table("testcase_testcase_sets").
 		Joins("INNER JOIN testcases ON testcase_testcase_sets.testcase_id = testcases.id").
-		Where("problem_id=?", submit.info.ProblemID).
+		Where("problem_id=? AND deleted_at IS NULL", submit.info.ProblemID).
 		Find(&testcaseTestcaseSets)
-
-	fmt.Println(testcaseSets)
-	fmt.Println(testcaseTestcaseSets)
 
 	// testcase_set_id -> testcase_id
 	testcaseSetMap := map[int64][]int64{}
@@ -276,6 +271,7 @@ func scoring(submit SubmitT) int64 {
 
 		for _, testcaseID := range testcaseSetMap[testcaseSet.ID] {
 			if submit.testcaseResultsMap[testcaseID].Status != "AC" {
+				fmt.Printf("status(%d): %s\n",testcaseID, submit.testcaseResultsMap[testcaseID].Status)
 				isAC = false
 				break
 			}
@@ -408,7 +404,7 @@ func tryTestcase(submit *SubmitT, sessionIDChan *chan CmdResultJSON) error {
 	}
 	defer db.Close()
 
-	testcases := [128]TestcaseGORM{}
+	testcases := []TestcaseGORM{}
 	var testcasesNum = 0
 	db.
 		Table("testcases").
@@ -417,7 +413,7 @@ func tryTestcase(submit *SubmitT, sessionIDChan *chan CmdResultJSON) error {
 		Find(&testcases).
 		Count(&testcasesNum)
 
-	fmt.Printf("testcasesNum = %d\n", testcasesNum)
+	fmt.Printf("testcasesNum = %d\n", len(testcases))
 
 	submit.testcases = testcases
 
