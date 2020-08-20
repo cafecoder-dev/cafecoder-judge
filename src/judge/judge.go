@@ -686,8 +686,8 @@ func langConfig(submit *SubmitT) error {
 		submit.compileCmd = "mcs Main.cs -out:Main.exe 2> userStderr.txt"
 		submit.executeCmd = "mono Main.exe < testcase.txt > userStdout.txt 2> userStderr.txt"
 		submit.fileName = "Main.cs"
-	case "cs_dotnet31":
-		submit.compileCmd = "mkdir main && cd main && dotnet new console 2> ../userStderr.txt && mv ./../Main.cs Program.cs && dotnet publish -o . 2>> ../userStderr.txt && cd /"
+	case "cs_dotnet31": // C#
+		submit.compileCmd = "mkdir main && cd main && dotnet new console && mv ./../Main.cs Program.cs && dotnet publish -c Release --nologo -v q -o . 2>> ../userStderr.txt && cd /"
 		submit.executeCmd = "dotnet ./main/main.dll < testcase.txt > userStdout.txt 2> userStderr.txt"
 		submit.fileName = "Main.cs"
 	case "go_114": //golang
