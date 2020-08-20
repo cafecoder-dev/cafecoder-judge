@@ -102,14 +102,20 @@ func executeJudge(request requestJSON) {
 		end := time.Now()
 		cmdResult.Time = (end.Sub(start)).Milliseconds()
 	
-		if err != nil {
+		if err != nil || cmd.ProcessState.ExitCode() != 0 {
 			cmdResult.Result = false
 		} else {
 			cmdResult.Result = true
 		}
 	} else {
-		err := exec.Command("sh", "-c", request.Cmd).Run()
+		cmd := exec.Command("sh", "-c", request.Cmd)
+		err := cmd.Start()
 		if err != nil {
+			fmt.Println("start exception")
+			cmdResult.ErrMessage += "start exception\n"
+		}
+		cmd.Wait()
+		if err != nil || cmd.ProcessState.ExitCode() != 0 {
 			cmdResult.Result = false
 		} else {
 			cmdResult.Result = true
