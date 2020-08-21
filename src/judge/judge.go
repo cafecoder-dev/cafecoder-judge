@@ -76,7 +76,7 @@ type TestcaseResultsGORM struct {
 	Status          string `gorm:"column:status"`
 	ExecutionTime   int    `gorm:"column:execution_time"`
 	ExecutionMemory int    `gorm:"column:execution_memory"`
-	CreatedAt       string `gorm:"colum:created_at"`
+	CreatedAt       string `gorm:"column:created_at"`
 	UpdatedAt       string `gorm:"column:updated_at"`
 }
 
@@ -100,16 +100,17 @@ type TestcaseSetsGORM struct {
 }
 
 type TestcaseTestcaseSetsGORM struct {
-	TestcaseID int64 `gorm:"column:testcase_id"`
+	TestcaseID    int64 `gorm:"column:testcase_id"`
+	TestcaseSetID int64 `gorm:"column:testcase_set_id"`
 }
 
 type SubmitT struct {
 	info   SubmitGORM
 	result ResultGORM
 
-	firstIndex      int64
-	testcases       []TestcaseGORM
-	testcaseResults []TestcaseResultsGORM
+	firstIndex         int64
+	testcases          []TestcaseGORM
+	testcaseResultsMap map[int64]TestcaseResultsGORM
 
 	hashedID     string
 	execDirPath  string
@@ -125,7 +126,7 @@ type SubmitT struct {
 }
 
 func validationCheck(args SubmitGORM) bool {
-	if !checkRegexp(`[(A-Za-z0-9\./_\/)]*`, args.Lang) || !checkRegexp(`[(A-Za-z0-9\./_\/)]*`, args.Path)  {
+	if !checkRegexp(`[(A-Za-z0-9\./_\/)]*`, args.Lang) || !checkRegexp(`[(A-Za-z0-9\./_\/)]*`, args.Path) {
 		return false
 	}
 	return true
@@ -163,7 +164,7 @@ func manageCmds(cmdChickets *CmdTicket) {
 			_ = cnct.Close()
 			println("connection closed")
 			data, _ := base64.StdEncoding.DecodeString(cmdResult.ErrMessage)
-			fmt.Println(string(data))
+
 			cmdResult.ErrMessage = string(data)
 			go func() {
 				(*cmdChickets).Lock()
@@ -177,20 +178,17 @@ func manageCmds(cmdChickets *CmdTicket) {
 func sendResult(submit SubmitT) {
 	priorityMap := map[string]int{"-": 0, "AC": 1, "WA": 2, "TLE": 3, "RE": 4, "MLE": 5, "CE": 6, "IE": 7}
 
-	
-
 	if priorityMap[submit.result.Status] < 6 {
 		submit.result.Status = "AC"
-		for i := 0; i < len(submit.testcaseResults); i++ {
-			fmt.Printf("i:%d %s\n", i, submit.testcaseResults[i].Status)
-			if priorityMap[submit.testcaseResults[i].Status] > priorityMap[submit.result.Status] {
-				submit.result.Status = submit.testcaseResults[i].Status
+		for _, elem := range submit.testcaseResultsMap {
+			if priorityMap[elem.Status] > priorityMap[submit.result.Status] {
+				submit.result.Status = elem.Status
 			}
-			if submit.testcaseResults[i].ExecutionTime > submit.result.ExecutionTime {
-				submit.result.ExecutionTime = submit.testcaseResults[i].ExecutionTime
+			if elem.ExecutionTime > submit.result.ExecutionTime {
+				submit.result.ExecutionTime = elem.ExecutionTime
 			}
-			if submit.testcaseResults[i].ExecutionMemory > submit.result.ExecutionMemory {
-				submit.result.ExecutionMemory = submit.testcaseResults[i].ExecutionMemory
+			if elem.ExecutionMemory > submit.result.ExecutionMemory {
+				submit.result.ExecutionMemory = elem.ExecutionMemory
 			}
 		}
 	}
@@ -201,16 +199,41 @@ func sendResult(submit SubmitT) {
 	}
 	defer db.Close()
 
+
+	for _, elem := range submit.testcaseResultsMap {
+		if submit.info.Status == "WR" {
+			db.
+				Table("testcase_results").
+				Where("submit_id = ? AND testcase_id = ?", submit.info.ID, elem.TestcaseID).
+				Update(elem.UpdatedAt).
+				Update(elem.Status).
+				Update(elem.ExecutionTime).
+				Update(elem.ExecutionMemory)
+		} else if submit.info.Status == "WJ" {
+			db.
+				Table("testcase_results").
+				Create(&elem)
+		}
+	}
+
 	submit.result.Point = int(scoring(submit))
+
 	db.
 		Table("submits").
 		Where("id=? AND deleted_at IS NULL", submit.info.ID).
-		Update(&submit.result)
+		Update(&submit.result).
+		Update("point", submit.result.Point).
+		Update("execution_memory", submit.result.ExecutionMemory)
 
 	<-judgeNumberLimit
 }
 
 func scoring(submit SubmitT) int64 {
+	// テストケースごとの結果を得られない
+	if submit.result.Status == "IE" || submit.result.Status == "CE" {
+		return 0
+	}
+
 	db, err := sqlConnect()
 	if err != nil {
 		fmt.Println(err.Error())
@@ -226,25 +249,37 @@ func scoring(submit SubmitT) int64 {
 		Table("testcase_sets").
 		Where("problem_id=?", submit.info.ProblemID).
 		Find(&testcaseSets)
+	db.
+		Table("testcase_testcase_sets").
+		Joins("INNER JOIN testcases ON testcase_testcase_sets.testcase_id = testcases.id").
+		Where("problem_id=? AND testcase_testcase_sets.deleted_at IS NULL", submit.info.ProblemID).
+		Find(&testcaseTestcaseSets)
+
+	// testcase_set_id -> testcase_id
+	testcaseSetMap := map[int64][]int64{}
+
+	for _, testcaseSet := range testcaseSets {
+		testcaseSetMap[testcaseSet.ID] = make([]int64, 0)
+	}
+	for _, testcaseTestcaseSet := range testcaseTestcaseSets {
+		testcaseSetMap[testcaseTestcaseSet.TestcaseSetID] =
+			append(testcaseSetMap[testcaseTestcaseSet.TestcaseSetID], testcaseTestcaseSet.TestcaseID)
+	}
 
 	score := int64(0)
-	for _, elem := range testcaseSets {
-		flg := true
+	for _, testcaseSet := range testcaseSets {
+		isAC := true
 
-		db.
-			Table("testcase_testcase_sets").
-			Where("testcase_set_id=?", elem.ID).
-			Find(&testcaseTestcaseSets)
-
-		for _, elem2 := range testcaseTestcaseSets {
-			if submit.testcaseResults[elem2.TestcaseID-submit.firstIndex].Status != "AC" {
-				flg = false
+		for _, testcaseID := range testcaseSetMap[testcaseSet.ID] {
+			if submit.testcaseResultsMap[testcaseID].Status != "AC" {
+				fmt.Printf("status(%d): %s\n",testcaseID, submit.testcaseResultsMap[testcaseID].Status)
+				isAC = false
 				break
 			}
 		}
 
-		if flg {
-			score += int64(elem.Points)
+		if isAC {
+			score += int64(testcaseSet.Points)
 		}
 	}
 
@@ -253,6 +288,7 @@ func scoring(submit SubmitT) int64 {
 
 func judge(args SubmitGORM, tftpCli **tftp.Client, cmdChickets *CmdTicket) {
 	var submit = SubmitT{}
+	submit.testcaseResultsMap = map[int64]TestcaseResultsGORM{}
 
 	if !validationCheck(args) {
 		submit.result.Status = "IE"
@@ -266,7 +302,6 @@ func judge(args SubmitGORM, tftpCli **tftp.Client, cmdChickets *CmdTicket) {
 	(*cmdChickets).Lock()
 	sessionIDChan := (*cmdChickets).channel[id]
 	(*cmdChickets).Unlock()
-
 	defer func() {
 		(*cmdChickets).Lock()
 		delete((*cmdChickets).channel, id)
@@ -371,24 +406,29 @@ func tryTestcase(submit *SubmitT, sessionIDChan *chan CmdResultJSON) error {
 	defer db.Close()
 
 	testcases := []TestcaseGORM{}
+	var testcasesNum = 0
 	db.
 		Table("testcases").
 		Where("problem_id=? AND deleted_at IS NULL", strconv.FormatInt(submit.info.ProblemID, 10)).
 		Order("id").
-		Find(&testcases)
+		Find(&testcases).
+		Count(&testcasesNum)
 
-	submit.firstIndex = testcases[0].TestcaseID
 	submit.testcases = testcases
 
-	for i := 0; i < len(testcases); i++ {
+	for i := 0; i < testcasesNum; i++ {
+		testcaseResults := TestcaseResultsGORM{SubmitID: submit.info.ID, TestcaseID: submit.testcases[i].TestcaseID}
+
 		// skip
 		if TLEcase {
-			submit.testcaseResults[i].Status = "-"
+			testcaseResults.Status = "-"
+			testcaseResults.CreatedAt = timeToString(time.Now())
+			testcaseResults.UpdatedAt = timeToString(time.Now())
+			submit.testcaseResultsMap[submit.testcases[i].TestcaseID] = testcaseResults
 			continue
 		}
 
 		file, _ := os.Create("./codes/" + submit.hashedID)
-
 		file.Write(([]byte)(testcases[i].Input))
 		file.Close()
 
@@ -420,44 +460,34 @@ func tryTestcase(submit *SubmitT, sessionIDChan *chan CmdResultJSON) error {
 		outputTestcaseLines := strings.Split(string(testcases[i].Output), "\n")
 
 		if recv.Time > 2000 {
-			submit.testcaseResults[i].Status = "TLE"
+			testcaseResults.Status = "TLE"
 			TLEcase = true
 		} else {
-			if !recv.Result && stdoutBuf.String() != "" {
+			if !recv.Result {
 				for j := 0; j < len(stderrLines); j++ {
 					println(stderrLines[j])
 				}
-				submit.testcaseResults[i].Status = "RE"
+				testcaseResults.Status = "RE"
 			} else {
-				submit.testcaseResults[i].Status = "WA"
+				testcaseResults.Status = "WA"
 				for j := 0; j < len(stdoutLines) && j < len(outputTestcaseLines); j++ {
-					submit.testcaseResults[i].Status = "AC"
+					testcaseResults.Status = "AC"
 					if strings.TrimSpace(string(stdoutLines[j])) != strings.TrimSpace(string(outputTestcaseLines[j])) {
-						submit.testcaseResults[i].Status = "WA"
+						testcaseResults.Status = "WA"
 						break
 					}
 				}
 			}
 		}
 
-		submit.testcaseResults[i].TestcaseID = testcases[i].TestcaseID
-		submit.testcaseResults[i].ExecutionTime = recv.Time
-		submit.testcaseResults[i].ExecutionMemory = recv.MemUsage
-		submit.testcaseResults[i].SubmitID = submit.info.ID
-		submit.testcaseResults[i].CreatedAt = timeToString(time.Now())
-		submit.testcaseResults[i].UpdatedAt = timeToString(time.Now())
-	}
-
-	for i := 0; i < len(testcases); i++ {
+		testcaseResults.ExecutionTime = recv.Time
+		testcaseResults.ExecutionMemory = recv.MemUsage
 		if submit.info.Status == "WR" {
-			db.
-				Where("submit_id = ? AND testcase_id = ?", submit.info.ID, testcases[i].TestcaseID).
-				Update(&submit.testcaseResults[i].UpdatedAt)
-		} else if submit.info.Status == "WJ" {
-			db.
-				Table("testcase_results").
-				Create(&submit.testcaseResults[i])
+			testcaseResults.CreatedAt = timeToString(time.Now())
 		}
+		testcaseResults.UpdatedAt = timeToString(time.Now())
+
+		submit.testcaseResultsMap[testcaseResults.TestcaseID] = testcaseResults
 	}
 
 	return nil
@@ -535,9 +565,7 @@ func requestCmd(cmd string, mode string, submit SubmitT, sessionIDChan *chan Cmd
 		return recv, err
 	}
 
-	request.Cmd = cmd
-	request.SessionID = fmt.Sprintf("%d", submit.info.ID)
-	request.Mode = mode
+	request = RequestJSON{Cmd: cmd, SessionID: fmt.Sprintf("%d", submit.info.ID), Mode: mode}
 	b, err := json.Marshal(request)
 	if err != nil {
 		return recv, err
@@ -658,9 +686,9 @@ func langConfig(submit *SubmitT) error {
 		submit.compileCmd = "mcs Main.cs -out:Main.exe 2> userStderr.txt"
 		submit.executeCmd = "mono Main.exe < testcase.txt > userStdout.txt 2> userStderr.txt"
 		submit.fileName = "Main.cs"
-	case "cs_dotnet31":
-		submit.compileCmd = "mkdir Main && mv Main.cs Main && cd Main && dotnet new console 2> ../userStderr.txt && dotnet publish -o . > ../userStderr.txt"
-		submit.executeCmd = "dotnet ./Main/Main.dll > userStdout.txt 2> userStderr.txt"
+	case "cs_dotnet31": // C#
+		submit.compileCmd = "mkdir main && cd main && dotnet new console && mv ./../Main.cs Program.cs && dotnet publish -c Release --nologo -v q -o . 2>> ../userStderr.txt && cd /"
+		submit.executeCmd = "dotnet ./main/main.dll < testcase.txt > userStdout.txt 2> userStderr.txt"
 		submit.fileName = "Main.cs"
 	case "go_114": //golang
 		submit.compileCmd = "export PATH=$PATH:/usr/local/go/bin && mkdir Main && mv Main.go Main && cd Main && go build . 2> ../userStderr.txt"
@@ -683,12 +711,11 @@ func langConfig(submit *SubmitT) error {
 
 func sqlConnect() (database *gorm.DB, err error) {
 	if err = godotenv.Load("./.env"); err != nil {
-		println("?")
 		return nil, err
 	}
 
-	DBMS := "mysql"
-	DBNAME := "p6jav_cafecoder_prod"
+	DBMS := os.Getenv("DBMS")
+	DBNAME := os.Getenv("DB_NAME")
 	USER := os.Getenv("DB_USER")
 	PASS := os.Getenv("DB_PASS")
 	HOST := os.Getenv("DB_HOST")

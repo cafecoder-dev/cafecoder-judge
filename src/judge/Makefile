@@ -1,2 +1,2 @@
 judge:judge.go
-	go build -o ./../..
+	go build --race -o ./../..
