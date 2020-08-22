@@ -35,6 +35,7 @@ import (
 
 const (
 	maxJudge = 20
+	apiVersion = "1.40"
 )
 
 // judgeNumberLimit limits the number of judges
@@ -599,7 +600,7 @@ func removeContainer(submit SubmitT) {
 
 func createContainer(submit *SubmitT) error {
 	var err error
-	submit.containerCli, err = client.NewClientWithOpts(client.WithVersion("1.35"))
+	submit.containerCli, err = client.NewClientWithOpts(client.WithVersion(apiVersion))
 	defer submit.containerCli.Close()
 	if err != nil {
 		return err
