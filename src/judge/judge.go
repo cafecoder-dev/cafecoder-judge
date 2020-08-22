@@ -31,7 +31,6 @@ import (
 	"github.com/jinzhu/gorm"
 	"github.com/joho/godotenv"
 	"google.golang.org/api/option"
-	"pack.ag/tftp"
 )
 
 const (
@@ -147,6 +146,7 @@ func timeToString(t time.Time) string {
 	return t.Format("2006-01-02 15:04:05")
 }
 
+// コンテナからの応答を待つ。@Nperair さんが作りました
 func manageCmds(cmdChickets *CmdTicket) {
 	listen, err := net.Listen("tcp", "0.0.0.0:3344")
 	if err != nil {
@@ -175,6 +175,7 @@ func manageCmds(cmdChickets *CmdTicket) {
 	}
 }
 
+// 最終的な結果を DB に投げる。モジュールの分割が雑すぎるからなんとかしたい
 func sendResult(submit SubmitT) {
 	priorityMap := map[string]int{"-": 0, "AC": 1, "WA": 2, "TLE": 3, "RE": 4, "MLE": 5, "CE": 6, "IE": 7}
 
@@ -228,6 +229,7 @@ func sendResult(submit SubmitT) {
 	<-judgeNumberLimit
 }
 
+// テストケースセットからスコアリング
 func scoring(submit SubmitT) int64 {
 	// テストケースごとの結果を得られない
 	if submit.result.Status == "IE" || submit.result.Status == "CE" {
@@ -286,7 +288,8 @@ func scoring(submit SubmitT) int64 {
 	return score
 }
 
-func judge(args SubmitGORM, tftpCli **tftp.Client, cmdChickets *CmdTicket) {
+// ジャッジのフロー　tryTestcase と混同するけど致し方ない・・？
+func judge(args SubmitGORM, cmdChickets *CmdTicket) {
 	var submit = SubmitT{}
 	submit.testcaseResultsMap = map[int64]TestcaseResultsGORM{}
 
@@ -322,7 +325,7 @@ func judge(args SubmitGORM, tftpCli **tftp.Client, cmdChickets *CmdTicket) {
 		return
 	}
 
-	codePath, err := saveSourceCode(submit)
+	codePath, err := downloadSourceCode(submit)
 	if err != nil {
 		fmt.Printf("%s\n", err.Error())
 		submit.result.Status = "IE"
@@ -554,6 +557,7 @@ func tarCopy(hostFilePath string, containerFilePath string, mode int64, submit S
 	return nil
 }
 
+// 起動中のコンテナにコマンドをリクエストする
 func requestCmd(cmd string, mode string, submit SubmitT, sessionIDChan *chan CmdResultJSON) (CmdResultJSON, error) {
 	var (
 		request RequestJSON
@@ -621,7 +625,7 @@ func createContainer(submit *SubmitT) error {
 	return nil
 }
 
-func saveSourceCode(submit SubmitT) (string, error) {
+func downloadSourceCode(submit SubmitT) (string, error) {
 	credentialFilePath := "./key.json"
 
 	ctx := context.Background()
@@ -738,11 +742,6 @@ func main() {
 		log.Fatal(err)
 	}
 
-	tftpCli, err := tftp.NewClient()
-	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "%s\n", err)
-	}
-
 	for {
 		var res []SubmitGORM
 		db.Table("submits").Where("status='WR' OR status='WJ'").Order("updated_at").Find(&res)
@@ -763,7 +762,7 @@ func main() {
 				cmdChickets.channel[strconv.FormatInt(res[i].ID, 10)] = make(chan CmdResultJSON)
 				cmdChickets.Unlock()
 
-				go judge(res[i], &tftpCli, &cmdChickets)
+				go judge(res[i], &cmdChickets)
 			}
 		}
 	}
