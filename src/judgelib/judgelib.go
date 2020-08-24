@@ -137,10 +137,10 @@ func sendResult(submit types.SubmitT) {
 			db.
 				Table("testcase_results").
 				Where("submit_id = ? AND testcase_id = ?", submit.Info.ID, elem.TestcaseID).
-				Update(elem.UpdatedAt).
-				Update(elem.Status).
-				Update(elem.ExecutionTime).
-				Update(elem.ExecutionMemory)
+				Update("updated_at", elem.UpdatedAt).
+				Update("status", elem.Status).
+				Update("execution_time", elem.ExecutionTime).
+				Update("execution_memory", elem.ExecutionMemory)
 		} else if submit.Info.Status == "WJ" {
 			db.
 				Table("testcase_results").
@@ -327,7 +327,7 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 
 		testcaseResults.ExecutionTime = recv.Time
 		testcaseResults.ExecutionMemory = recv.MemUsage
-		if submit.Info.Status == "WR" {
+		if submit.Info.Status == "WJ" {
 			testcaseResults.CreatedAt = util.TimeToString(time.Now())
 		}
 		testcaseResults.UpdatedAt = util.TimeToString(time.Now())
