@@ -245,6 +245,17 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 
 	submit.Testcases = testcases
 
+	tx := db.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	if err := tx.Error; err != nil {
+		return err
+	}
+
 	for i := 0; i < testcasesNum; i++ {
 		testcaseResults := types.TestcaseResultsGORM{SubmitID: submit.Info.ID, TestcaseID: submit.Testcases[i].TestcaseID}
 
@@ -313,7 +324,7 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 		testcaseResults.UpdatedAt = util.TimeToString(time.Now())
 
 		if submit.Info.Status == "WR" {
-			db.
+			tx.
 				Table("testcase_results").
 				Where("submit_id = ? AND testcase_id = ?", submit.Info.ID, testcaseResults.TestcaseID).
 				Update("updated_at", testcaseResults.UpdatedAt).
@@ -321,7 +332,7 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 				Update("execution_time", testcaseResults.ExecutionTime).
 				Update("execution_memory", testcaseResults.ExecutionMemory)
 		} else if submit.Info.Status == "WJ" {
-			db.
+			tx.
 				Table("testcase_results").
 				Create(&testcaseResults)
 		}
@@ -329,5 +340,6 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 		submit.TestcaseResultsMap[testcaseResults.TestcaseID] = testcaseResults
 	}
 
-	return nil
+
+	return tx.Commit().Error
 }
