@@ -1,6 +1,4 @@
-/judge
-/executeUsercode
+/cafecoder-judge
 /key.json
 /.env
-/.idea
 /vendor
