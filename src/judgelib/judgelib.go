@@ -2,9 +2,6 @@ package judgelib
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
-
 	"fmt"
 	"os"
 	"strconv"
@@ -14,12 +11,12 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 
 	"github.com/cafecoder-dev/cafecoder-judge/src/cmdlib"
+	"github.com/cafecoder-dev/cafecoder-judge/src/dkrlib"
 	"github.com/cafecoder-dev/cafecoder-judge/src/gcplib"
+	"github.com/cafecoder-dev/cafecoder-judge/src/langconf"
+	"github.com/cafecoder-dev/cafecoder-judge/src/sqllib"
 	"github.com/cafecoder-dev/cafecoder-judge/src/types"
 	"github.com/cafecoder-dev/cafecoder-judge/src/util"
-	"github.com/cafecoder-dev/cafecoder-judge/src/langconf"
-	"github.com/cafecoder-dev/cafecoder-judge/src/dkrlib"
-	"github.com/cafecoder-dev/cafecoder-judge/src/sqllib"
 )
 
 // ジャッジのフロー　tryTestcase と混同するけど致し方ない・・？
@@ -46,7 +43,7 @@ func Judge(args types.SubmitsGORM, cmdChickets *types.CmdTicket) {
 		(*cmdChickets).Unlock()
 	}()
 
-	submit.HashedID = makeStringHash(id)
+	submit.HashedID = util.MakeStringHash(id)
 
 	defer func() {
 		os.Remove(submit.CodePath)
@@ -112,7 +109,7 @@ func sendResult(submit types.SubmitT) {
 	priorityMap := map[string]int{"-": 0, "AC": 1, "WA": 2, "TLE": 3, "RE": 4, "MLE": 5, "CE": 6, "IE": 7}
 
 	if priorityMap[submit.Result.Status] < 6 {
-		submit.Result.Status = "AC"
+		submit.Result.Status = "-"
 		for _, elem := range submit.TestcaseResultsMap {
 			if priorityMap[elem.Status] > priorityMap[submit.Result.Status] {
 				submit.Result.Status = elem.Status
@@ -146,6 +143,11 @@ func sendResult(submit types.SubmitT) {
 
 // テストケースセットからスコアリング
 func scoring(submit types.SubmitT) int64 {
+	var (
+		testcaseSets         []types.TestcaseSetsGORM
+		testcaseTestcaseSets []types.TestcaseTestcaseSetsGORM
+	)
+
 	if submit.Result.Status == "IE" || submit.Result.Status == "CE" {
 		return 0
 	}
@@ -155,11 +157,6 @@ func scoring(submit types.SubmitT) int64 {
 		fmt.Println(err.Error())
 	}
 	defer db.Close()
-
-	var (
-		testcaseSets         []types.TestcaseSetsGORM
-		testcaseTestcaseSets []types.TestcaseTestcaseSetsGORM
-	)
 
 	db.
 		Table("testcase_sets").
@@ -204,27 +201,18 @@ func scoring(submit types.SubmitT) int64 {
 func compile(submit *types.SubmitT, sessionIDchan *chan types.CmdResultJSON) error {
 	recv, err := cmdlib.RequestCmd(submit.CompileCmd, "other", *submit, sessionIDchan)
 	if err != nil {
-		fmt.Printf("%s\n", err.Error())
 		return err
 	}
 
 	if !recv.Result {
 		submit.Result.Status = "CE"
-		return nil
 	}
 
 	return nil
 }
 
-func makeStringHash(str string) string {
-	hash := sha256.Sum256([]byte(str))
-	return hex.EncodeToString(hash[:])
-}
-
 func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan types.CmdResultJSON) error {
-	var (
-		TLEcase bool
-	)
+	var TLEcase bool
 
 	db, err := sqllib.NewDB()
 	if err != nil {
@@ -254,20 +242,20 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 		return err
 	}
 
-	for i := 0; i < testcasesNum; i++ {
-		testcaseResults := types.TestcaseResultsGORM{SubmitID: submit.Info.ID, TestcaseID: submit.Testcases[i].TestcaseID}
+	for _, elem := range testcases {
+		testcaseResults := types.TestcaseResultsGORM{SubmitID: submit.Info.ID, TestcaseID: elem.TestcaseID}
 
 		// skip
 		if TLEcase {
 			testcaseResults.Status = "-"
 			testcaseResults.CreatedAt = util.TimeToString(time.Now())
 			testcaseResults.UpdatedAt = util.TimeToString(time.Now())
-			submit.TestcaseResultsMap[submit.Testcases[i].TestcaseID] = testcaseResults
+			submit.TestcaseResultsMap[elem.TestcaseID] = testcaseResults
 			continue
 		}
 
 		file, _ := os.Create("./codes/" + submit.HashedID)
-		file.Write(([]byte)(testcases[i].Input))
+		file.Write(([]byte)(elem.Input))
 		file.Close()
 
 		if err = dkrlib.CopyToContainer(ctx, "./codes/"+submit.HashedID, "/testcase.txt", 0744, *submit); err != nil {
@@ -283,15 +271,15 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 		if err != nil {
 			return err
 		}
+		stdoutLines := strings.Split(stdoutBuf.String(), "\n")
+
 		stderrBuf, err := dkrlib.CopyFromContainer(ctx, "/userStderr.txt", *submit)
 		if err != nil {
 			return err
 		}
-
-		stdoutLines := strings.Split(stdoutBuf.String(), "\n")
 		stderrLines := strings.Split(stderrBuf.String(), "\n")
 
-		outputTestcaseLines := strings.Split(string(testcases[i].Output), "\n")
+		outputTestcaseLines := strings.Split(string(elem.Output), "\n")
 
 		if recv.Time > 2000 {
 			testcaseResults.Status = "TLE"
@@ -337,7 +325,6 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 
 		submit.TestcaseResultsMap[testcaseResults.TestcaseID] = testcaseResults
 	}
-
 
 	return tx.Commit().Error
 }
