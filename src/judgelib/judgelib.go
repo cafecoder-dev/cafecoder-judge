@@ -188,7 +188,6 @@ func scoring(submit types.SubmitT) int64 {
 
 		for _, testcaseID := range testcaseSetMap[testcaseSet.ID] {
 			if submit.TestcaseResultsMap[testcaseID].Status != "AC" {
-				fmt.Printf("status(%d): %s\n", testcaseID, submit.TestcaseResultsMap[testcaseID].Status)
 				isAC = false
 				break
 			}
@@ -210,7 +209,6 @@ func compile(submit *types.SubmitT, sessionIDchan *chan types.CmdResultJSON) err
 	}
 
 	if !recv.Result {
-		fmt.Printf("%s CE\n", recv.ErrMessage)
 		submit.Result.Status = "CE"
 		return nil
 	}
