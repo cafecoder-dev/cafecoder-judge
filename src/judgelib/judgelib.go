@@ -132,22 +132,6 @@ func sendResult(submit types.SubmitT) {
 	}
 	defer db.Close()
 
-	for _, elem := range submit.TestcaseResultsMap {
-		if submit.Info.Status == "WR" {
-			db.
-				Table("testcase_results").
-				Where("submit_id = ? AND testcase_id = ?", submit.Info.ID, elem.TestcaseID).
-				Update("updated_at", elem.UpdatedAt).
-				Update("status", elem.Status).
-				Update("execution_time", elem.ExecutionTime).
-				Update("execution_memory", elem.ExecutionMemory)
-		} else if submit.Info.Status == "WJ" {
-			db.
-				Table("testcase_results").
-				Create(&elem)
-		}
-	}
-
 	submit.Result.Point = int(scoring(submit))
 
 	db.
@@ -246,7 +230,7 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 
 	db, err := sqllib.NewDB()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "%s\n", err)
+		return err
 	}
 	defer db.Close()
 
@@ -278,24 +262,20 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 		file.Close()
 
 		if err = dkrlib.CopyToContainer(ctx, "./codes/"+submit.HashedID, "/testcase.txt", 0744, *submit); err != nil {
-			println("tar copy error")
 			return err
 		}
 
 		recv, err := cmdlib.RequestCmd(submit.ExecuteCmd, "judge", *submit, sessionIDChan)
 		if err != nil {
-			println("requestCmd error")
 			return err
 		}
 
 		stdoutBuf, err := dkrlib.CopyFromContainer(ctx, "/userStdout.txt", *submit)
 		if err != nil {
-			println(err.Error())
 			return err
 		}
 		stderrBuf, err := dkrlib.CopyFromContainer(ctx, "/userStderr.txt", *submit)
 		if err != nil {
-			println(err.Error())
 			return err
 		}
 
@@ -331,6 +311,20 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 			testcaseResults.CreatedAt = util.TimeToString(time.Now())
 		}
 		testcaseResults.UpdatedAt = util.TimeToString(time.Now())
+
+		if submit.Info.Status == "WR" {
+			db.
+				Table("testcase_results").
+				Where("submit_id = ? AND testcase_id = ?", submit.Info.ID, testcaseResults.TestcaseID).
+				Update("updated_at", testcaseResults.UpdatedAt).
+				Update("status", testcaseResults.Status).
+				Update("execution_time", testcaseResults.ExecutionTime).
+				Update("execution_memory", testcaseResults.ExecutionMemory)
+		} else if submit.Info.Status == "WJ" {
+			db.
+				Table("testcase_results").
+				Create(&testcaseResults)
+		}
 
 		submit.TestcaseResultsMap[testcaseResults.TestcaseID] = testcaseResults
 	}
