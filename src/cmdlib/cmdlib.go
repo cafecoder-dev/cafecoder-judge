@@ -14,7 +14,7 @@ import (
 func ManageCmds(cmdChickets *types.CmdTicket) {
 	listen, err := net.Listen("tcp", "0.0.0.0:3344")
 	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "%s\n", err)
+		fmt.Fprintf(os.Stderr, "%s\n", err)
 	}
 
 	for {
@@ -24,8 +24,8 @@ func ManageCmds(cmdChickets *types.CmdTicket) {
 		}
 		go func() {
 			var cmdResult types.CmdResultJSON
-			_ = json.NewDecoder(cnct).Decode(&cmdResult)
-			_ = cnct.Close()
+			json.NewDecoder(cnct).Decode(&cmdResult)
+			cnct.Close()
 
 			data, _ := base64.StdEncoding.DecodeString(cmdResult.ErrMessage)
 
@@ -56,7 +56,6 @@ func RequestCmd(cmd string, mode string, submit types.SubmitT, sessionIDChan *ch
 	if err != nil {
 		return recv, err
 	}
-	fmt.Println(request)
 
 	_, _ = containerConn.Write(b)
 	_ = containerConn.Close()
@@ -66,7 +65,6 @@ func RequestCmd(cmd string, mode string, submit types.SubmitT, sessionIDChan *ch
 			break
 		}
 	}
-	fmt.Println(recv)
 
 	return recv, nil
 }

@@ -2,9 +2,6 @@ package judgelib
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
-
 	"fmt"
 	"os"
 	"strconv"
@@ -14,12 +11,12 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 
 	"github.com/cafecoder-dev/cafecoder-judge/src/cmdlib"
+	"github.com/cafecoder-dev/cafecoder-judge/src/dkrlib"
 	"github.com/cafecoder-dev/cafecoder-judge/src/gcplib"
+	"github.com/cafecoder-dev/cafecoder-judge/src/langconf"
+	"github.com/cafecoder-dev/cafecoder-judge/src/sqllib"
 	"github.com/cafecoder-dev/cafecoder-judge/src/types"
 	"github.com/cafecoder-dev/cafecoder-judge/src/util"
-	"github.com/cafecoder-dev/cafecoder-judge/src/langconf"
-	"github.com/cafecoder-dev/cafecoder-judge/src/dkrlib"
-	"github.com/cafecoder-dev/cafecoder-judge/src/sqllib"
 )
 
 // ジャッジのフロー　tryTestcase と混同するけど致し方ない・・？
@@ -46,7 +43,7 @@ func Judge(args types.SubmitsGORM, cmdChickets *types.CmdTicket) {
 		(*cmdChickets).Unlock()
 	}()
 
-	submit.HashedID = makeStringHash(id)
+	submit.HashedID = util.MakeStringHash(id)
 
 	defer func() {
 		os.Remove(submit.CodePath)
@@ -112,7 +109,7 @@ func sendResult(submit types.SubmitT) {
 	priorityMap := map[string]int{"-": 0, "AC": 1, "WA": 2, "TLE": 3, "RE": 4, "MLE": 5, "CE": 6, "IE": 7}
 
 	if priorityMap[submit.Result.Status] < 6 {
-		submit.Result.Status = "AC"
+		submit.Result.Status = "-"
 		for _, elem := range submit.TestcaseResultsMap {
 			if priorityMap[elem.Status] > priorityMap[submit.Result.Status] {
 				submit.Result.Status = elem.Status
@@ -132,22 +129,6 @@ func sendResult(submit types.SubmitT) {
 	}
 	defer db.Close()
 
-	for _, elem := range submit.TestcaseResultsMap {
-		if submit.Info.Status == "WR" {
-			db.
-				Table("testcase_results").
-				Where("submit_id = ? AND testcase_id = ?", submit.Info.ID, elem.TestcaseID).
-				Update(elem.UpdatedAt).
-				Update(elem.Status).
-				Update(elem.ExecutionTime).
-				Update(elem.ExecutionMemory)
-		} else if submit.Info.Status == "WJ" {
-			db.
-				Table("testcase_results").
-				Create(&elem)
-		}
-	}
-
 	submit.Result.Point = int(scoring(submit))
 
 	db.
@@ -162,6 +143,11 @@ func sendResult(submit types.SubmitT) {
 
 // テストケースセットからスコアリング
 func scoring(submit types.SubmitT) int64 {
+	var (
+		testcaseSets         []types.TestcaseSetsGORM
+		testcaseTestcaseSets []types.TestcaseTestcaseSetsGORM
+	)
+
 	if submit.Result.Status == "IE" || submit.Result.Status == "CE" {
 		return 0
 	}
@@ -171,11 +157,6 @@ func scoring(submit types.SubmitT) int64 {
 		fmt.Println(err.Error())
 	}
 	defer db.Close()
-
-	var (
-		testcaseSets         []types.TestcaseSetsGORM
-		testcaseTestcaseSets []types.TestcaseTestcaseSetsGORM
-	)
 
 	db.
 		Table("testcase_sets").
@@ -204,7 +185,6 @@ func scoring(submit types.SubmitT) int64 {
 
 		for _, testcaseID := range testcaseSetMap[testcaseSet.ID] {
 			if submit.TestcaseResultsMap[testcaseID].Status != "AC" {
-				fmt.Printf("status(%d): %s\n", testcaseID, submit.TestcaseResultsMap[testcaseID].Status)
 				isAC = false
 				break
 			}
@@ -221,32 +201,22 @@ func scoring(submit types.SubmitT) int64 {
 func compile(submit *types.SubmitT, sessionIDchan *chan types.CmdResultJSON) error {
 	recv, err := cmdlib.RequestCmd(submit.CompileCmd, "other", *submit, sessionIDchan)
 	if err != nil {
-		fmt.Printf("%s\n", err.Error())
 		return err
 	}
 
 	if !recv.Result {
-		fmt.Printf("%s CE\n", recv.ErrMessage)
 		submit.Result.Status = "CE"
-		return nil
 	}
 
 	return nil
 }
 
-func makeStringHash(str string) string {
-	hash := sha256.Sum256([]byte(str))
-	return hex.EncodeToString(hash[:])
-}
-
 func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan types.CmdResultJSON) error {
-	var (
-		TLEcase bool
-	)
+	var TLEcase bool
 
 	db, err := sqllib.NewDB()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "%s\n", err)
+		return err
 	}
 	defer db.Close()
 
@@ -261,48 +231,55 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 
 	submit.Testcases = testcases
 
-	for i := 0; i < testcasesNum; i++ {
-		testcaseResults := types.TestcaseResultsGORM{SubmitID: submit.Info.ID, TestcaseID: submit.Testcases[i].TestcaseID}
+	tx := db.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	if err := tx.Error; err != nil {
+		return err
+	}
+
+	for _, elem := range testcases {
+		testcaseResults := types.TestcaseResultsGORM{SubmitID: submit.Info.ID, TestcaseID: elem.TestcaseID}
 
 		// skip
 		if TLEcase {
 			testcaseResults.Status = "-"
 			testcaseResults.CreatedAt = util.TimeToString(time.Now())
 			testcaseResults.UpdatedAt = util.TimeToString(time.Now())
-			submit.TestcaseResultsMap[submit.Testcases[i].TestcaseID] = testcaseResults
+			submit.TestcaseResultsMap[elem.TestcaseID] = testcaseResults
 			continue
 		}
 
 		file, _ := os.Create("./codes/" + submit.HashedID)
-		file.Write(([]byte)(testcases[i].Input))
+		file.Write(([]byte)(elem.Input))
 		file.Close()
 
 		if err = dkrlib.CopyToContainer(ctx, "./codes/"+submit.HashedID, "/testcase.txt", 0744, *submit); err != nil {
-			println("tar copy error")
 			return err
 		}
 
 		recv, err := cmdlib.RequestCmd(submit.ExecuteCmd, "judge", *submit, sessionIDChan)
 		if err != nil {
-			println("requestCmd error")
 			return err
 		}
 
 		stdoutBuf, err := dkrlib.CopyFromContainer(ctx, "/userStdout.txt", *submit)
 		if err != nil {
-			println(err.Error())
 			return err
 		}
+		stdoutLines := strings.Split(stdoutBuf.String(), "\n")
+
 		stderrBuf, err := dkrlib.CopyFromContainer(ctx, "/userStderr.txt", *submit)
 		if err != nil {
-			println(err.Error())
 			return err
 		}
-
-		stdoutLines := strings.Split(stdoutBuf.String(), "\n")
 		stderrLines := strings.Split(stderrBuf.String(), "\n")
 
-		outputTestcaseLines := strings.Split(string(testcases[i].Output), "\n")
+		outputTestcaseLines := strings.Split(string(elem.Output), "\n")
 
 		if recv.Time > 2000 {
 			testcaseResults.Status = "TLE"
@@ -327,13 +304,27 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 
 		testcaseResults.ExecutionTime = recv.Time
 		testcaseResults.ExecutionMemory = recv.MemUsage
-		if submit.Info.Status == "WR" {
+		if submit.Info.Status == "WJ" {
 			testcaseResults.CreatedAt = util.TimeToString(time.Now())
 		}
 		testcaseResults.UpdatedAt = util.TimeToString(time.Now())
 
+		if submit.Info.Status == "WR" {
+			tx.
+				Table("testcase_results").
+				Where("submit_id = ? AND testcase_id = ?", submit.Info.ID, testcaseResults.TestcaseID).
+				Update("updated_at", testcaseResults.UpdatedAt).
+				Update("status", testcaseResults.Status).
+				Update("execution_time", testcaseResults.ExecutionTime).
+				Update("execution_memory", testcaseResults.ExecutionMemory)
+		} else if submit.Info.Status == "WJ" {
+			tx.
+				Table("testcase_results").
+				Create(&testcaseResults)
+		}
+
 		submit.TestcaseResultsMap[testcaseResults.TestcaseID] = testcaseResults
 	}
 
-	return nil
+	return tx.Commit().Error
 }

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"time"
 	"regexp"
+	"crypto/sha256"
+	"encoding/hex"
 
 	"github.com/cafecoder-dev/cafecoder-judge/src/types"
 )
@@ -28,4 +30,9 @@ func CheckRegexp(reg, str string) bool {
 
 func TimeToString(t time.Time) string {
 	return t.Format("2006-01-02 15:04:05")
+}
+
+func MakeStringHash(str string) string {
+	hash := sha256.Sum256([]byte(str))
+	return hex.EncodeToString(hash[:])
 }
