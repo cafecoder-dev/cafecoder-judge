@@ -221,7 +221,6 @@ func compile(submit *types.SubmitT, sessionIDchan *chan types.CmdResultJSON) err
 }
 
 func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan types.CmdResultJSON) error {
-	var TLEcase bool
 
 	submit.Result.Status = "-"
 
@@ -244,15 +243,6 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 
 	for _, elem := range testcases {
 		testcaseResults := types.TestcaseResultsGORM{SubmitID: submit.Info.ID, TestcaseID: elem.TestcaseID}
-
-		// skip
-		if TLEcase {
-			testcaseResults.Status = "-"
-			testcaseResults.CreatedAt = util.TimeToString(time.Now())
-			testcaseResults.UpdatedAt = util.TimeToString(time.Now())
-			submit.TestcaseResultsMap[elem.TestcaseID] = testcaseResults
-			continue
-		}
 
 		file, _ := os.Create("./codes/" + submit.HashedID)
 		file.Write(([]byte)(elem.Input))
@@ -283,7 +273,6 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 
 		if recv.Time > 2000 {
 			testcaseResults.Status = "TLE"
-			TLEcase = true
 		} else {
 			if !recv.Result {
 				for j := 0; j < len(stderrLines); j++ {
