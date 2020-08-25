@@ -1,9 +1,9 @@
 package judgelib
 
 import (
-	"github.com/jinzhu/gorm"
 	"context"
 	"fmt"
+	"github.com/jinzhu/gorm"
 	"os"
 	"strconv"
 	"strings"
@@ -239,6 +239,13 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 		Find(&testcases).
 		Count(&testcasesNum)
 
+	if submit.Info.Status == "WR" {
+		db.
+			Table("testcase_results").
+			Where("submit_id = ? AND deleted_at IS NULL", submit.Info.ID).
+			Update("deleted_at", util.TimeToString(time.Now())) // todo gorm に追加
+	}
+
 	submit.Testcases = testcases
 
 	for _, elem := range testcases {
@@ -309,13 +316,7 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 		}
 		testcaseResults.UpdatedAt = util.TimeToString(time.Now())
 
-		if submit.Info.Status == "WR" {
-			db.
-				Table("testcase_results").
-				Where("submit_id = ? AND deleted_at IS NULL", submit.Info.ID).
-				Update("deleted_at", util.TimeToString(time.Now())) // todo gorm に追加
-		}
-
+		// testcase_results の挿入
 		db.
 			Table("testcase_results").
 			Create(&testcaseResults)
