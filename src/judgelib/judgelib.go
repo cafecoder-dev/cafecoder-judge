@@ -317,7 +317,7 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 			submit.Result.Status = testcaseResults.Status
 			db.
 				Table("submits").
-				Where("id = ? AND deleted_at IS NULL").
+				Where("id = ? AND deleted_at IS NULL", submit.Info.ID).
 				Update("status", submit.Result.Status)
 		}
 
