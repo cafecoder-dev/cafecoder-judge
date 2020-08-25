@@ -1,6 +1,7 @@
 package judgelib
 
 import (
+	"github.com/jinzhu/gorm"
 	"context"
 	"fmt"
 	"os"
@@ -19,7 +20,9 @@ import (
 	"github.com/cafecoder-dev/cafecoder-judge/src/util"
 )
 
-// ジャッジのフロー　tryTestcase と混同するけど致し方ない・・？
+var priorityMap = map[string]int{"-": 0, "AC": 1, "WA": 2, "TLE": 3, "RE": 4, "MLE": 5, "CE": 6, "IE": 7}
+
+// Judge ... ジャッジのフロー
 func Judge(args types.SubmitsGORM, cmdChickets *types.CmdTicket) {
 	var submit = types.SubmitT{}
 	submit.TestcaseResultsMap = map[int64]types.TestcaseResultsGORM{}
@@ -106,14 +109,8 @@ func Judge(args types.SubmitsGORM, cmdChickets *types.CmdTicket) {
 
 // 最終的な結果を DB に投げる。モジュールの分割が雑すぎるからなんとかしたい
 func sendResult(submit types.SubmitT) {
-	priorityMap := map[string]int{"-": 0, "AC": 1, "WA": 2, "TLE": 3, "RE": 4, "MLE": 5, "CE": 6, "IE": 7}
-
 	if priorityMap[submit.Result.Status] < 6 {
-		submit.Result.Status = "-"
 		for _, elem := range submit.TestcaseResultsMap {
-			if priorityMap[elem.Status] > priorityMap[submit.Result.Status] {
-				submit.Result.Status = elem.Status
-			}
 			if elem.ExecutionTime > submit.Result.ExecutionTime {
 				submit.Result.ExecutionTime = elem.ExecutionTime
 			}
@@ -136,7 +133,15 @@ func sendResult(submit types.SubmitT) {
 		Where("id=? AND deleted_at IS NULL", submit.Info.ID).
 		Update(&submit.Result).
 		Update("point", submit.Result.Point).
-		Update("execution_memory", submit.Result.ExecutionMemory)
+		Update("execution_memory", submit.Result.ExecutionMemory).
+		Update("compile_error", submit.Result.CompileError)
+
+	if submit.Result.Status == "CE" {
+		db.
+			Table("submits").
+			Where("id=? AND deleted_at IS NULL", submit.Info.ID).
+			Update("execution_memory", gorm.Expr("NULL"))
+	}
 
 	<-util.JudgeNumberLimit
 }
@@ -204,6 +209,10 @@ func compile(submit *types.SubmitT, sessionIDchan *chan types.CmdResultJSON) err
 		return err
 	}
 
+	fmt.Println(recv.ErrMessage)
+
+	submit.Result.CompileError = recv.ErrMessage
+
 	if !recv.Result {
 		submit.Result.Status = "CE"
 	}
@@ -213,6 +222,8 @@ func compile(submit *types.SubmitT, sessionIDchan *chan types.CmdResultJSON) err
 
 func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan types.CmdResultJSON) error {
 	var TLEcase bool
+
+	submit.Result.Status = "-"
 
 	db, err := sqllib.NewDB()
 	if err != nil {
@@ -300,6 +311,14 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 					}
 				}
 			}
+		}
+
+		if priorityMap[submit.Result.Status] < priorityMap[testcaseResults.Status] {
+			submit.Result.Status = testcaseResults.Status
+			db.
+				Table("submits").
+				Where("id = ? AND deleted_at IS NULL", submit.Info.ID).
+				Update("status", submit.Result.Status)
 		}
 
 		testcaseResults.ExecutionTime = recv.Time

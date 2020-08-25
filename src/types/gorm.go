@@ -5,6 +5,7 @@ type ResultGORM struct {
 	ExecutionTime   int    `gorm:"column:execution_time"`
 	ExecutionMemory int    `gorm:"column:execution_memory"`
 	Point           int    `gorm:"column:point"` // int64 にしたほうがいいかもしれない(カラムにあわせて int にした)
+	CompileError    string `gorm:"column:compile_error"`
 }
 
 type TestcaseResultsGORM struct {
