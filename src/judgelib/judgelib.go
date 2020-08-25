@@ -309,19 +309,17 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 		}
 		testcaseResults.UpdatedAt = util.TimeToString(time.Now())
 
+		db.
+			Table("testcase_results").
+			Create(&testcaseResults)
+
 		if submit.Info.Status == "WR" {
 			db.
 				Table("testcase_results").
-				Where("submit_id = ? AND testcase_id = ?", submit.Info.ID, testcaseResults.TestcaseID).
-				Update("updated_at", testcaseResults.UpdatedAt).
-				Update("status", testcaseResults.Status).
-				Update("execution_time", testcaseResults.ExecutionTime).
-				Update("execution_memory", testcaseResults.ExecutionMemory)
-		} else if submit.Info.Status == "WJ" {
-			db.
-				Table("testcase_results").
-				Create(&testcaseResults)
+				Where("submit_id = ? AND deleted_at IS NULL", submit.Info.ID).
+				Update("deleted_at", util.TimeToString(time.Now())) // todo gorm に追加
 		}
+				
 
 		submit.TestcaseResultsMap[testcaseResults.TestcaseID] = testcaseResults
 	}
