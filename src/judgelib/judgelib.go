@@ -1,6 +1,7 @@
 package judgelib
 
 import (
+	"github.com/jinzhu/gorm"
 	"context"
 	"fmt"
 	"os"
@@ -19,7 +20,7 @@ import (
 	"github.com/cafecoder-dev/cafecoder-judge/src/util"
 )
 
-// ジャッジのフロー　tryTestcase と混同するけど致し方ない・・？
+// Judge ... ジャッジのフロー
 func Judge(args types.SubmitsGORM, cmdChickets *types.CmdTicket) {
 	var submit = types.SubmitT{}
 	submit.TestcaseResultsMap = map[int64]types.TestcaseResultsGORM{}
@@ -136,7 +137,15 @@ func sendResult(submit types.SubmitT) {
 		Where("id=? AND deleted_at IS NULL", submit.Info.ID).
 		Update(&submit.Result).
 		Update("point", submit.Result.Point).
-		Update("execution_memory", submit.Result.ExecutionMemory)
+		Update("execution_memory", submit.Result.ExecutionMemory).
+		Update("compile_error", submit.Result.CompileError)
+
+	if submit.Result.Status == "CE" {
+		db.
+			Table("submits").
+			Where("id=? AND deleted_at IS NULL", submit.Info.ID).
+			Update("execution_memory", gorm.Expr("NULL"))
+	}
 
 	<-util.JudgeNumberLimit
 }
@@ -203,6 +212,10 @@ func compile(submit *types.SubmitT, sessionIDchan *chan types.CmdResultJSON) err
 	if err != nil {
 		return err
 	}
+
+	fmt.Println(recv.ErrMessage)
+
+	submit.Result.CompileError = recv.ErrMessage
 
 	if !recv.Result {
 		submit.Result.Status = "CE"
