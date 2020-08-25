@@ -242,17 +242,6 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 
 	submit.Testcases = testcases
 
-	tx := db.Begin()
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-		}
-	}()
-
-	if err := tx.Error; err != nil {
-		return err
-	}
-
 	for _, elem := range testcases {
 		testcaseResults := types.TestcaseResultsGORM{SubmitID: submit.Info.ID, TestcaseID: elem.TestcaseID}
 
@@ -315,10 +304,13 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 
 		if priorityMap[submit.Result.Status] < priorityMap[testcaseResults.Status] {
 			submit.Result.Status = testcaseResults.Status
-			db.
-				Table("submits").
-				Where("id = ? AND deleted_at IS NULL", submit.Info.ID).
-				Update("status", submit.Result.Status)
+
+			if submit.Result.Status != "AC" {
+				db.
+					Table("submits").
+					Where("id = ? AND deleted_at IS NULL", submit.Info.ID).
+					Update("status", submit.Result.Status)
+			}
 		}
 
 		testcaseResults.ExecutionTime = recv.Time
@@ -329,7 +321,7 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 		testcaseResults.UpdatedAt = util.TimeToString(time.Now())
 
 		if submit.Info.Status == "WR" {
-			tx.
+			db.
 				Table("testcase_results").
 				Where("submit_id = ? AND testcase_id = ?", submit.Info.ID, testcaseResults.TestcaseID).
 				Update("updated_at", testcaseResults.UpdatedAt).
@@ -337,7 +329,7 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 				Update("execution_time", testcaseResults.ExecutionTime).
 				Update("execution_memory", testcaseResults.ExecutionMemory)
 		} else if submit.Info.Status == "WJ" {
-			tx.
+			db.
 				Table("testcase_results").
 				Create(&testcaseResults)
 		}
@@ -345,5 +337,5 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 		submit.TestcaseResultsMap[testcaseResults.TestcaseID] = testcaseResults
 	}
 
-	return tx.Commit().Error
+	return nil
 }
