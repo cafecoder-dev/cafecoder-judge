@@ -311,9 +311,7 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 
 		testcaseResults.ExecutionTime = recv.Time
 		testcaseResults.ExecutionMemory = recv.MemUsage
-		if submit.Info.Status == "WJ" {
-			testcaseResults.CreatedAt = util.TimeToString(time.Now())
-		}
+		testcaseResults.CreatedAt = util.TimeToString(time.Now())
 		testcaseResults.UpdatedAt = util.TimeToString(time.Now())
 
 		// testcase_results の挿入
