@@ -20,6 +20,8 @@ import (
 	"github.com/cafecoder-dev/cafecoder-judge/src/util"
 )
 
+var priorityMap = map[string]int{"-": 0, "AC": 1, "WA": 2, "TLE": 3, "RE": 4, "MLE": 5, "CE": 6, "IE": 7}
+
 // Judge ... ジャッジのフロー
 func Judge(args types.SubmitsGORM, cmdChickets *types.CmdTicket) {
 	var submit = types.SubmitT{}
@@ -107,14 +109,9 @@ func Judge(args types.SubmitsGORM, cmdChickets *types.CmdTicket) {
 
 // 最終的な結果を DB に投げる。モジュールの分割が雑すぎるからなんとかしたい
 func sendResult(submit types.SubmitT) {
-	priorityMap := map[string]int{"-": 0, "AC": 1, "WA": 2, "TLE": 3, "RE": 4, "MLE": 5, "CE": 6, "IE": 7}
 
 	if priorityMap[submit.Result.Status] < 6 {
-		submit.Result.Status = "-"
 		for _, elem := range submit.TestcaseResultsMap {
-			if priorityMap[elem.Status] > priorityMap[submit.Result.Status] {
-				submit.Result.Status = elem.Status
-			}
 			if elem.ExecutionTime > submit.Result.ExecutionTime {
 				submit.Result.ExecutionTime = elem.ExecutionTime
 			}
@@ -227,6 +224,8 @@ func compile(submit *types.SubmitT, sessionIDchan *chan types.CmdResultJSON) err
 func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan types.CmdResultJSON) error {
 	var TLEcase bool
 
+	submit.Result.Status = "-"
+
 	db, err := sqllib.NewDB()
 	if err != nil {
 		return err
@@ -313,6 +312,10 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 					}
 				}
 			}
+		}
+
+		if priorityMap[submit.Result.Status] < priorityMap[testcaseResults.Status] {
+			submit.Result.Status = testcaseResults.Status
 		}
 
 		testcaseResults.ExecutionTime = recv.Time
