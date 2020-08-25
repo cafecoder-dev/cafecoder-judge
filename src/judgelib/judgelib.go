@@ -20,7 +20,7 @@ import (
 	"github.com/cafecoder-dev/cafecoder-judge/src/util"
 )
 
-var priorityMap = map[string]int{"-": 0, "AC": 1, "TLE": 2, "WA": 3, "RE": 4, "MLE": 5, "CE": 6, "IE": 7}
+var priorityMap = map[string]int{"WJ": 0, "WR": 1, "AC": 2, "TLE": 3, "MLE": 4, "OLE": 5, "WA": 6, "RE": 7, "CE": 8, "IE": 9}
 
 // Judge ... ジャッジのフロー
 func Judge(args types.SubmitsGORM, cmdChickets *types.CmdTicket) {
