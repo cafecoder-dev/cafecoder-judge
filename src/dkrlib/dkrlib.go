@@ -32,8 +32,14 @@ func CreateContainer(ctx context.Context, submit *types.SubmitT) error {
 	defer submit.ContainerCli.Close()
 
 	config := &container.Config{Image: "cafecoder"}
+	hostConfig := &container.HostConfig{
+		Resources: container.Resources {
+			Memory: 2048000000, // 2048 MB
+		},
+	}
+	
 
-	resp, err := submit.ContainerCli.ContainerCreate(ctx, config, nil, nil, nil, submit.HashedID)
+	resp, err := submit.ContainerCli.ContainerCreate(ctx, config, hostConfig, nil, nil, submit.HashedID)
 	if err != nil {
 		return err
 	}
@@ -43,6 +49,7 @@ func CreateContainer(ctx context.Context, submit *types.SubmitT) error {
 	if err != nil {
 		return err
 	}
+
 
 	submit.ContainerInspect, err = submit.ContainerCli.ContainerInspect(ctx, submit.ContainerID)
 	if err != nil {

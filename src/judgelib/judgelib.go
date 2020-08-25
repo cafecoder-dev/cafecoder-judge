@@ -54,7 +54,7 @@ func Judge(args types.SubmitsGORM, cmdChickets *types.CmdTicket) {
 	}()
 
 	if err := langconf.LangConfig(&submit); err != nil {
-		println(err.Error())
+		fmt.Printf("%s\n", err.Error())
 		submit.Result.Status = "IE"
 		sendResult(submit)
 		return
@@ -87,6 +87,7 @@ func Judge(args types.SubmitsGORM, cmdChickets *types.CmdTicket) {
 	}
 
 	if err = compile(&submit, &sessionIDChan); err != nil {
+		fmt.Printf("%s\n", err.Error())
 		submit.Result.Status = "IE"
 		sendResult(submit)
 		return
@@ -97,6 +98,7 @@ func Judge(args types.SubmitsGORM, cmdChickets *types.CmdTicket) {
 	}
 
 	if err = tryTestcase(ctx, &submit, &sessionIDChan); err != nil {
+		fmt.Printf("%s\n", err.Error())
 		submit.Result.Status = "IE"
 		sendResult(submit)
 		return
