@@ -109,7 +109,6 @@ func Judge(args types.SubmitsGORM, cmdChickets *types.CmdTicket) {
 
 // 最終的な結果を DB に投げる。モジュールの分割が雑すぎるからなんとかしたい
 func sendResult(submit types.SubmitT) {
-
 	if priorityMap[submit.Result.Status] < 6 {
 		for _, elem := range submit.TestcaseResultsMap {
 			if elem.ExecutionTime > submit.Result.ExecutionTime {
@@ -316,6 +315,10 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 
 		if priorityMap[submit.Result.Status] < priorityMap[testcaseResults.Status] {
 			submit.Result.Status = testcaseResults.Status
+			db.
+				Table("submits").
+				Where("id = ? AND deleted_at IS NULL").
+				Update("status", submit.Result.Status)
 		}
 
 		testcaseResults.ExecutionTime = recv.Time
