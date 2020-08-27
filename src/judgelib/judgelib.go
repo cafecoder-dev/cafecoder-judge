@@ -72,7 +72,7 @@ func Judge(args types.SubmitsGORM, cmdChickets *types.CmdTicket) {
 
 	err = dkrlib.CreateContainer(ctx, &submit)
 	if err != nil {
-		fmt.Printf("[ERROR] container: %s\n", err.Error())
+		fmt.Printf("%s\n", err.Error())
 		submit.Result.Status = "IE"
 		sendResult(submit)
 		return
@@ -109,7 +109,7 @@ func Judge(args types.SubmitsGORM, cmdChickets *types.CmdTicket) {
 	return
 }
 
-// 最終的な結果を DB に投げる。モジュールの分割が雑すぎるからなんとかしたい
+// 最終的な結果を DB に投げる。
 func sendResult(submit types.SubmitT) {
 	if priorityMap[submit.Result.Status] < 6 {
 		for _, elem := range submit.TestcaseResultsMap {
@@ -213,7 +213,7 @@ func compile(submit *types.SubmitT, sessionIDchan *chan types.CmdResultJSON) err
 
 	fmt.Println(recv.ErrMessage)
 
-	submit.Result.CompileError = recv.ErrMessage
+	submit.Result.CompileError = recv.ErrMessage[:65535]
 
 	if !recv.Result {
 		submit.Result.Status = "CE"

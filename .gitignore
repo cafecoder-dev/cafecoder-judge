@@ -2,3 +2,4 @@
 /.env
 /vendor
 /cafecoder-judge
+/log.txt
