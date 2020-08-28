@@ -111,7 +111,7 @@ func Judge(args types.SubmitsGORM, cmdChickets *types.CmdTicket) {
 
 // 最終的な結果を DB に投げる。
 func sendResult(submit types.SubmitT) {
-	if priorityMap[submit.Result.Status] < 6 {
+	if priorityMap[submit.Result.Status] <= 6 {
 		for _, elem := range submit.TestcaseResultsMap {
 			if elem.ExecutionTime > submit.Result.ExecutionTime {
 				submit.Result.ExecutionTime = elem.ExecutionTime
@@ -134,15 +134,18 @@ func sendResult(submit types.SubmitT) {
 		Table("submits").
 		Where("id=? AND deleted_at IS NULL", submit.Info.ID).
 		Update(&submit.Result).
-		Update("point", submit.Result.Point).
+		Update("execution_time", submit.Result.ExecutionTime).
 		Update("execution_memory", submit.Result.ExecutionMemory).
-		Update("compile_error", submit.Result.CompileError)
+		Update("point", submit.Result.Point)
+
+	fmt.Println(submit.Result)
 
 	if submit.Result.Status == "CE" {
 		db.
 			Table("submits").
 			Where("id=? AND deleted_at IS NULL", submit.Info.ID).
-			Update("execution_memory", gorm.Expr("NULL"))
+			Update("execution_memory", gorm.Expr("NULL")).
+			Update("execution_time", gorm.Expr("NULL"))
 	}
 
 	<-util.JudgeNumberLimit
@@ -219,7 +222,6 @@ func compile(submit *types.SubmitT, sessionIDchan *chan types.CmdResultJSON) err
 		submit.Result.CompileError = recv.ErrMessage[:65535]
 	}
 	
-
 	if !recv.Result {
 		submit.Result.Status = "CE"
 	}
