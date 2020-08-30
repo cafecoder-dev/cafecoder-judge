@@ -239,7 +239,7 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 	}
 	defer db.Close()
 
-	testcases := []types.TestcaseGORM{}
+	var testcases []types.TestcaseGORM
 	var testcasesNum = 0
 	db.
 		Table("testcases").
@@ -257,11 +257,22 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 
 	submit.Testcases = testcases
 
+	var problem types.ProblemsGORM
+	db.
+		Table("problems").
+		Where("id = ? AND deleted_at IS NULL", submit.Info.ProblemID).
+		First(&problem)
+
 	for _, elem := range testcases {
 		testcaseResults := types.TestcaseResultsGORM{SubmitID: submit.Info.ID, TestcaseID: elem.TestcaseID}
 
 		file, _ := os.Create("./codes/" + submit.HashedID)
-		file.Write(([]byte)(elem.Input))
+		input, output, err := gcplib.DownloadTestcase(ctx, problem.UUID, elem.Name)
+		if err != nil {
+			return err
+		}
+
+		file.Write(input)
 		file.Close()
 
 		if err = dkrlib.CopyToContainer(ctx, "./codes/"+submit.HashedID, "/testcase.txt", 0744, *submit); err != nil {
@@ -285,7 +296,7 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 		}
 		stderrLines := strings.Split(stderrBuf.String(), "\n")
 
-		outputTestcaseLines := strings.Split(string(elem.Output), "\n")
+		outputTestcaseLines := strings.Split(output, "\n")
 
 		if recv.Time > 2000 {
 			testcaseResults.Status = "TLE"
@@ -299,7 +310,7 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 				testcaseResults.Status = "WA"
 				for j := 0; j < len(stdoutLines) && j < len(outputTestcaseLines); j++ {
 					testcaseResults.Status = "AC"
-					if strings.TrimSpace(string(stdoutLines[j])) != strings.TrimSpace(string(outputTestcaseLines[j])) {
+					if strings.TrimSpace(stdoutLines[j]) != strings.TrimSpace(outputTestcaseLines[j]) {
 						testcaseResults.Status = "WA"
 						break
 					}
