@@ -272,7 +272,7 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 			return err
 		}
 
-		file.Write(([]byte)(input))
+		file.Write(input)
 		file.Close()
 
 		if err = dkrlib.CopyToContainer(ctx, "./codes/"+submit.HashedID, "/testcase.txt", 0744, *submit); err != nil {
