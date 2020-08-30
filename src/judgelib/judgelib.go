@@ -310,7 +310,7 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 				testcaseResults.Status = "WA"
 				for j := 0; j < len(stdoutLines) && j < len(outputTestcaseLines); j++ {
 					testcaseResults.Status = "AC"
-					if strings.TrimSpace(string(stdoutLines[j])) != strings.TrimSpace(string(outputTestcaseLines[j])) {
+					if strings.TrimSpace(stdoutLines[j]) != strings.TrimSpace(outputTestcaseLines[j]) {
 						testcaseResults.Status = "WA"
 						break
 					}
