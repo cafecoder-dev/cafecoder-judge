@@ -1,5 +1,10 @@
 package types
 
+type ProblemsGORM struct {
+	ProblemId int64  `gorm:"column:id"`
+	UUID      string `gorm:"column:uuid"`
+}
+
 type ResultGORM struct {
 	Status          string `gorm:"column:status"`
 	ExecutionTime   int    `gorm:"column:execution_time"`
@@ -20,8 +25,7 @@ type TestcaseResultsGORM struct {
 
 type TestcaseGORM struct {
 	TestcaseID int64  `gorm:"column:id"`
-	Input      string `gorm:"column:input"`
-	Output     string `gorm:"column:output"`
+	Name       string `gorm:"column:name"`
 }
 
 type SubmitsGORM struct {

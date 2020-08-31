@@ -4,21 +4,26 @@ import (
 	"bufio"
 	"context"
 	"io"
+	"io/ioutil"
 	"os"
 	"strings"
+	"sync"
 
 	"cloud.google.com/go/storage"
 	"github.com/cafecoder-dev/cafecoder-judge/src/types"
 	"google.golang.org/api/option"
 )
 
-func DownloadSourceCode(ctx context.Context, submit types.SubmitT) (string, error) {
-	credentialFilePath := "./key.json"
+const credentialFilePath = "./key.json"
 
-	client, err := storage.NewClient(ctx, option.WithCredentialsFile(credentialFilePath))
-	if err != nil {
-		return "", err
-	}
+var client *storage.Client
+var once sync.Once
+
+func DownloadSourceCode(ctx context.Context, submit types.SubmitT) (string, error) {
+	once.Do(func() {
+		c, _ := storage.NewClient(ctx, option.WithCredentialsFile(credentialFilePath))
+		client = c
+	})
 
 	var fileName = strings.Split(submit.Info.Path, "/")[1]
 	savePath := "./codes/" + fileName
@@ -44,4 +49,38 @@ func DownloadSourceCode(ctx context.Context, submit types.SubmitT) (string, erro
 	}
 
 	return savePath, nil
+}
+
+func DownloadTestcase(ctx context.Context, problemUUID string, testcaseName string) ([]byte, string, error) {
+	once.Do(func() {
+		c, _ := storage.NewClient(ctx, option.WithCredentialsFile(credentialFilePath))
+		client = c
+	})
+
+	bucketName := "cafecoder-testcase"
+	bucket := client.Bucket(bucketName)
+
+	reader, err := bucket.Object(problemUUID + "/input/" + testcaseName).NewReader(ctx)
+	if err != nil {
+		return nil, "", err
+	}
+	defer reader.Close()
+
+	inputData, err := ioutil.ReadAll(reader)
+	if err != nil {
+		return nil, "", err
+	}
+
+	reader, err = bucket.Object(problemUUID + "/output/" + testcaseName).NewReader(ctx)
+	if err != nil {
+		return nil, "", err
+	}
+	defer reader.Close()
+
+	outputData, err := ioutil.ReadAll(reader)
+	if err != nil {
+		return nil, "", err
+	}
+
+	return inputData, string(outputData), nil
 }

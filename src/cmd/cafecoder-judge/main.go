@@ -1,16 +1,15 @@
 package main
 
 import (
-	"log"
 	"fmt"
+	"log"
 
-	_ "github.com/go-sql-driver/mysql"
-	"github.com/cafecoder-dev/cafecoder-judge/src/types"
-	"github.com/cafecoder-dev/cafecoder-judge/src/sqllib"
 	"github.com/cafecoder-dev/cafecoder-judge/src/cmdlib"
 	"github.com/cafecoder-dev/cafecoder-judge/src/judgelib"
+	"github.com/cafecoder-dev/cafecoder-judge/src/sqllib"
+	"github.com/cafecoder-dev/cafecoder-judge/src/types"
 	"github.com/cafecoder-dev/cafecoder-judge/src/util"
-	
+	_ "github.com/go-sql-driver/mysql"
 )
 
 func main() {
@@ -25,7 +24,11 @@ func main() {
 	for {
 		var res []types.SubmitsGORM
 
-		db.Table("submits").Where("status='WR' OR status='WJ'").Order("updated_at").Find(&res)
+		db.Table("submits").
+			Where("deleted_at IS NULL").
+			Where("status='WR' OR status='WJ'").
+			Order("updated_at").
+			Find(&res)
 
 		for i := 0; i < len(res); i++ {
 			cmdChickets.Lock()
