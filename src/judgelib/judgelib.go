@@ -221,7 +221,7 @@ func compile(submit *types.SubmitT, sessionIDchan *chan types.CmdResultJSON) err
 	} else {
 		submit.Result.CompileError = recv.ErrMessage[:65535]
 	}
-	
+
 	if !recv.Result {
 		submit.Result.Status = "CE"
 	}
@@ -284,38 +284,43 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 			return err
 		}
 
-		stdoutBuf, err := dkrlib.CopyFromContainer(ctx, "/userStdout.txt", *submit)
-		if err != nil {
-			return err
-		}
-		stdoutLines := strings.Split(stdoutBuf.String(), "\n")
+		if !recv.IsOLE {
+			stdoutBuf, err := dkrlib.CopyFromContainer(ctx, "/userStdout.txt", *submit)
+			if err != nil {
+				return err
+			}
+			stdoutLines := strings.Split(stdoutBuf.String(), "\n")
 
-		stderrBuf, err := dkrlib.CopyFromContainer(ctx, "/userStderr.txt", *submit)
-		if err != nil {
-			return err
-		}
-		stderrLines := strings.Split(stderrBuf.String(), "\n")
+			stderrBuf, err := dkrlib.CopyFromContainer(ctx, "/userStderr.txt", *submit)
+			if err != nil {
+				return err
+			}
+			stderrLines := strings.Split(stderrBuf.String(), "\n")
 
-		outputTestcaseLines := strings.Split(output, "\n")
+			outputTestcaseLines := strings.Split(output, "\n")
 
-		if recv.Time > 2000 {
-			testcaseResults.Status = "TLE"
-		} else {
-			if !recv.Result {
-				for j := 0; j < len(stderrLines); j++ {
-					println(stderrLines[j])
-				}
-				testcaseResults.Status = "RE"
+			if recv.Time > 2000 {
+				testcaseResults.Status = "TLE"
 			} else {
-				testcaseResults.Status = "WA"
-				for j := 0; j < len(stdoutLines) && j < len(outputTestcaseLines); j++ {
-					testcaseResults.Status = "AC"
-					if strings.TrimSpace(stdoutLines[j]) != strings.TrimSpace(outputTestcaseLines[j]) {
-						testcaseResults.Status = "WA"
-						break
+				if !recv.Result {
+					for j := 0; j < len(stderrLines); j++ {
+						println(stderrLines[j])
+					}
+					testcaseResults.Status = "RE"
+				} else {
+					testcaseResults.Status = "WA"
+					for j := 0; j < len(stdoutLines) && j < len(outputTestcaseLines); j++ {
+						testcaseResults.Status = "AC"
+						if strings.TrimSpace(stdoutLines[j]) != strings.TrimSpace(outputTestcaseLines[j]) {
+							testcaseResults.Status = "WA"
+							break
+						}
 					}
 				}
 			}
+
+		} else {
+			testcaseResults.Status = "OLE"
 		}
 
 		if priorityMap[submit.Result.Status] < priorityMap[testcaseResults.Status] {
