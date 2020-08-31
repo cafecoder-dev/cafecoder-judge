@@ -6,6 +6,7 @@ type CmdResultJSON struct {
 	Result     bool   `json:"result"`
 	ErrMessage string `json:"errMessage"`
 	MemUsage   int    `json:"memUsage"`
+	isOLE      bool   `json:"isOLE"`
 }
 
 type RequestJSON struct {
