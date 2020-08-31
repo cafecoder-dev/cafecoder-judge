@@ -23,7 +23,7 @@ const apiVersion = "1.40"
 // CreateContainer ... コンテナを作成する
 func CreateContainer(ctx context.Context, submit *types.SubmitT) error {
 	var err error
-	pidsLimit := int64(32)
+	// pidsLimit := int64(32)
 
 	submit.ContainerCli, err = client.NewClientWithOpts(client.WithVersion(apiVersion))
 
@@ -36,7 +36,7 @@ func CreateContainer(ctx context.Context, submit *types.SubmitT) error {
 	hostConfig := &container.HostConfig{
 		Resources: container.Resources {
 			Memory: 2048000000, // メモリの制限: 2048 MB
-			PidsLimit: &pidsLimit,		// プロセス数の制限: 32 個まで
+			// PidsLimit: &pidsLimit,		// プロセス数の制限: 32 個まで
 		},
 	}	
 
