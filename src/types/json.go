@@ -2,7 +2,7 @@ package types
 
 type CmdResultJSON struct {
 	SessionID  string `json:"sessionID"`
-	Time       int64  `json:"time"`
+	Time       int  `json:"time"`
 	Result     bool   `json:"result"`
 	ErrMessage string `json:"errMessage"`
 	MemUsage   int    `json:"memUsage"`
