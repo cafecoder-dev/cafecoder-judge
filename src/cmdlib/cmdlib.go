@@ -29,6 +29,8 @@ func ManageCmds(cmdChickets *types.CmdTicket) {
 
 			data, _ := base64.StdEncoding.DecodeString(cmdResult.ErrMessage)
 
+			fmt.Println(cmdResult)
+
 			cmdResult.ErrMessage = string(data)
 			go func() {
 				(*cmdChickets).Lock()
