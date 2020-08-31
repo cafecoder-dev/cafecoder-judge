@@ -23,7 +23,7 @@ func LangConfig(submit *types.SubmitT) error {
 		submit.ExecuteCmd = "./Main.out < testcase.txt > userStdout.txt 2> userStderr.txt"
 		submit.FileName = "Main.cpp"
 	case "java11": //java8
-		submit.CompileCmd = "javac Main.java 2> userStderr.txt"
+		submit.CompileCmd = "javac -encoding UTF-8 Main.java 2> userStderr.txt"
 		submit.ExecuteCmd = "java Main < testcase.txt > userStdout.txt 2> userStderr.txt"
 		submit.FileName = "Main.java"
 	case "python38": //python3

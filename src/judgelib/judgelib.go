@@ -1,9 +1,9 @@
 package judgelib
 
 import (
-	"github.com/jinzhu/gorm"
 	"context"
 	"fmt"
+	"github.com/jinzhu/gorm"
 	"os"
 	"strconv"
 	"strings"
@@ -20,7 +20,7 @@ import (
 	"github.com/cafecoder-dev/cafecoder-judge/src/util"
 )
 
-var priorityMap = map[string]int{"-": 0, "AC": 1, "WA": 2, "TLE": 3, "RE": 4, "MLE": 5, "CE": 6, "IE": 7}
+var priorityMap = map[string]int{"WJ": 0, "WR": 1, "AC": 2, "TLE": 3, "MLE": 4, "OLE": 5, "WA": 6, "RE": 7, "CE": 8, "IE": 9}
 
 // Judge ... ジャッジのフロー
 func Judge(args types.SubmitsGORM, cmdChickets *types.CmdTicket) {
@@ -54,7 +54,7 @@ func Judge(args types.SubmitsGORM, cmdChickets *types.CmdTicket) {
 	}()
 
 	if err := langconf.LangConfig(&submit); err != nil {
-		println(err.Error())
+		fmt.Printf("%s\n", err.Error())
 		submit.Result.Status = "IE"
 		sendResult(submit)
 		return
@@ -72,7 +72,7 @@ func Judge(args types.SubmitsGORM, cmdChickets *types.CmdTicket) {
 
 	err = dkrlib.CreateContainer(ctx, &submit)
 	if err != nil {
-		fmt.Printf("[ERROR] container: %s\n", err.Error())
+		fmt.Printf("%s\n", err.Error())
 		submit.Result.Status = "IE"
 		sendResult(submit)
 		return
@@ -87,6 +87,7 @@ func Judge(args types.SubmitsGORM, cmdChickets *types.CmdTicket) {
 	}
 
 	if err = compile(&submit, &sessionIDChan); err != nil {
+		fmt.Printf("%s\n", err.Error())
 		submit.Result.Status = "IE"
 		sendResult(submit)
 		return
@@ -97,6 +98,7 @@ func Judge(args types.SubmitsGORM, cmdChickets *types.CmdTicket) {
 	}
 
 	if err = tryTestcase(ctx, &submit, &sessionIDChan); err != nil {
+		fmt.Printf("%s\n", err.Error())
 		submit.Result.Status = "IE"
 		sendResult(submit)
 		return
@@ -107,9 +109,9 @@ func Judge(args types.SubmitsGORM, cmdChickets *types.CmdTicket) {
 	return
 }
 
-// 最終的な結果を DB に投げる。モジュールの分割が雑すぎるからなんとかしたい
+// 最終的な結果を DB に投げる。
 func sendResult(submit types.SubmitT) {
-	if priorityMap[submit.Result.Status] < 6 {
+	if priorityMap[submit.Result.Status] <= 6 {
 		for _, elem := range submit.TestcaseResultsMap {
 			if elem.ExecutionTime > submit.Result.ExecutionTime {
 				submit.Result.ExecutionTime = elem.ExecutionTime
@@ -132,15 +134,18 @@ func sendResult(submit types.SubmitT) {
 		Table("submits").
 		Where("id=? AND deleted_at IS NULL", submit.Info.ID).
 		Update(&submit.Result).
-		Update("point", submit.Result.Point).
+		Update("execution_time", submit.Result.ExecutionTime).
 		Update("execution_memory", submit.Result.ExecutionMemory).
-		Update("compile_error", submit.Result.CompileError)
+		Update("point", submit.Result.Point)
+
+	fmt.Println(submit.Result)
 
 	if submit.Result.Status == "CE" {
 		db.
 			Table("submits").
 			Where("id=? AND deleted_at IS NULL", submit.Info.ID).
-			Update("execution_memory", gorm.Expr("NULL"))
+			Update("execution_memory", gorm.Expr("NULL")).
+			Update("execution_time", gorm.Expr("NULL"))
 	}
 
 	<-util.JudgeNumberLimit
@@ -211,8 +216,12 @@ func compile(submit *types.SubmitT, sessionIDchan *chan types.CmdResultJSON) err
 
 	fmt.Println(recv.ErrMessage)
 
-	submit.Result.CompileError = recv.ErrMessage
-
+	if len(recv.ErrMessage) < 65535 {
+		submit.Result.CompileError = recv.ErrMessage
+	} else {
+		submit.Result.CompileError = recv.ErrMessage[:65535]
+	}
+	
 	if !recv.Result {
 		submit.Result.Status = "CE"
 	}
@@ -221,7 +230,6 @@ func compile(submit *types.SubmitT, sessionIDchan *chan types.CmdResultJSON) err
 }
 
 func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan types.CmdResultJSON) error {
-	var TLEcase bool
 
 	submit.Result.Status = "-"
 
@@ -231,7 +239,7 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 	}
 	defer db.Close()
 
-	testcases := []types.TestcaseGORM{}
+	var testcases []types.TestcaseGORM
 	var testcasesNum = 0
 	db.
 		Table("testcases").
@@ -240,33 +248,31 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 		Find(&testcases).
 		Count(&testcasesNum)
 
+	if submit.Info.Status == "WR" {
+		db.
+			Table("testcase_results").
+			Where("submit_id = ? AND deleted_at IS NULL", submit.Info.ID).
+			Update("deleted_at", util.TimeToString(time.Now())) // todo gorm に追加
+	}
+
 	submit.Testcases = testcases
 
-	tx := db.Begin()
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-		}
-	}()
-
-	if err := tx.Error; err != nil {
-		return err
-	}
+	var problem types.ProblemsGORM
+	db.
+		Table("problems").
+		Where("id = ? AND deleted_at IS NULL", submit.Info.ProblemID).
+		First(&problem)
 
 	for _, elem := range testcases {
 		testcaseResults := types.TestcaseResultsGORM{SubmitID: submit.Info.ID, TestcaseID: elem.TestcaseID}
 
-		// skip
-		if TLEcase {
-			testcaseResults.Status = "-"
-			testcaseResults.CreatedAt = util.TimeToString(time.Now())
-			testcaseResults.UpdatedAt = util.TimeToString(time.Now())
-			submit.TestcaseResultsMap[elem.TestcaseID] = testcaseResults
-			continue
+		file, _ := os.Create("./codes/" + submit.HashedID)
+		input, output, err := gcplib.DownloadTestcase(ctx, problem.UUID, elem.Name)
+		if err != nil {
+			return err
 		}
 
-		file, _ := os.Create("./codes/" + submit.HashedID)
-		file.Write(([]byte)(elem.Input))
+		file.Write(input)
 		file.Close()
 
 		if err = dkrlib.CopyToContainer(ctx, "./codes/"+submit.HashedID, "/testcase.txt", 0744, *submit); err != nil {
@@ -290,11 +296,10 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 		}
 		stderrLines := strings.Split(stderrBuf.String(), "\n")
 
-		outputTestcaseLines := strings.Split(string(elem.Output), "\n")
+		outputTestcaseLines := strings.Split(output, "\n")
 
 		if recv.Time > 2000 {
 			testcaseResults.Status = "TLE"
-			TLEcase = true
 		} else {
 			if !recv.Result {
 				for j := 0; j < len(stderrLines); j++ {
@@ -305,7 +310,7 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 				testcaseResults.Status = "WA"
 				for j := 0; j < len(stdoutLines) && j < len(outputTestcaseLines); j++ {
 					testcaseResults.Status = "AC"
-					if strings.TrimSpace(string(stdoutLines[j])) != strings.TrimSpace(string(outputTestcaseLines[j])) {
+					if strings.TrimSpace(stdoutLines[j]) != strings.TrimSpace(outputTestcaseLines[j]) {
 						testcaseResults.Status = "WA"
 						break
 					}
@@ -315,35 +320,27 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 
 		if priorityMap[submit.Result.Status] < priorityMap[testcaseResults.Status] {
 			submit.Result.Status = testcaseResults.Status
-			db.
-				Table("submits").
-				Where("id = ? AND deleted_at IS NULL", submit.Info.ID).
-				Update("status", submit.Result.Status)
+
+			if submit.Result.Status != "AC" {
+				db.
+					Table("submits").
+					Where("id = ? AND deleted_at IS NULL", submit.Info.ID).
+					Update("status", submit.Result.Status)
+			}
 		}
 
 		testcaseResults.ExecutionTime = recv.Time
 		testcaseResults.ExecutionMemory = recv.MemUsage
-		if submit.Info.Status == "WJ" {
-			testcaseResults.CreatedAt = util.TimeToString(time.Now())
-		}
+		testcaseResults.CreatedAt = util.TimeToString(time.Now())
 		testcaseResults.UpdatedAt = util.TimeToString(time.Now())
 
-		if submit.Info.Status == "WR" {
-			tx.
-				Table("testcase_results").
-				Where("submit_id = ? AND testcase_id = ?", submit.Info.ID, testcaseResults.TestcaseID).
-				Update("updated_at", testcaseResults.UpdatedAt).
-				Update("status", testcaseResults.Status).
-				Update("execution_time", testcaseResults.ExecutionTime).
-				Update("execution_memory", testcaseResults.ExecutionMemory)
-		} else if submit.Info.Status == "WJ" {
-			tx.
-				Table("testcase_results").
-				Create(&testcaseResults)
-		}
+		// testcase_results の挿入
+		db.
+			Table("testcase_results").
+			Create(&testcaseResults)
 
 		submit.TestcaseResultsMap[testcaseResults.TestcaseID] = testcaseResults
 	}
 
-	return tx.Commit().Error
+	return nil
 }
