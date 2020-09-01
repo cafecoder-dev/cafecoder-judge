@@ -2,7 +2,7 @@ package checklib
 
 import (
 	"strings"
-	"fmt"
+	// "fmt"
 )
 
 // https://qiita.com/spiegel-im-spiegel/items/f1cc014ecb233afaa8af
@@ -24,7 +24,7 @@ func Normal(userOutput string, testOutput string) bool {
 	testOutputLines := strings.Split(testOutput, " ")
 
 	var i, j int
-	fmt.Printf("%d %d\n",len(userOutputLines) , len(testOutputLines) )
+	// fmt.Printf("%d %d\n",len(userOutputLines) , len(testOutputLines) )
 	for  {
 		var str1, str2 string
 		for str1 == "" {
@@ -46,7 +46,7 @@ func Normal(userOutput string, testOutput string) bool {
 
 		if str1 == " " && str2 == " " {break}
 
-		fmt.Printf("%s|%s|\n", str1, str2)
+		// fmt.Printf("%s|%s|\n", str1, str2)
 
 		if str1 != str2 {
 			return false
