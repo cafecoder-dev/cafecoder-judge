@@ -6,7 +6,6 @@ import (
 	"github.com/jinzhu/gorm"
 	"os"
 	"strconv"
-	"strings"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -18,6 +17,7 @@ import (
 	"github.com/cafecoder-dev/cafecoder-judge/src/sqllib"
 	"github.com/cafecoder-dev/cafecoder-judge/src/types"
 	"github.com/cafecoder-dev/cafecoder-judge/src/util"
+	"github.com/cafecoder-dev/cafecoder-judge/src/checklib"
 )
 
 var priorityMap = map[string]int{"WJ": 0, "WR": 1, "AC": 2, "TLE": 3, "MLE": 4, "OLE": 5, "WA": 6, "RE": 7, "CE": 8, "IE": 9}
@@ -111,7 +111,7 @@ func Judge(args types.SubmitsGORM, cmdChickets *types.CmdTicket) {
 
 // 最終的な結果を DB に投げる。
 func sendResult(submit types.SubmitT) {
-	if priorityMap[submit.Result.Status] <= 6 {
+	if priorityMap[submit.Result.Status] <= 7 {
 		for _, elem := range submit.TestcaseResultsMap {
 			if elem.ExecutionTime > submit.Result.ExecutionTime {
 				submit.Result.ExecutionTime = elem.ExecutionTime
@@ -285,36 +285,23 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 		}
 
 		if !recv.IsOLE {
-			stdoutBuf, err := dkrlib.CopyFromContainer(ctx, "/userStdout.txt", *submit)
-			if err != nil {
-				return err
-			}
-			stdoutLines := strings.Split(stdoutBuf.String(), "\n")
-
-			stderrBuf, err := dkrlib.CopyFromContainer(ctx, "/userStderr.txt", *submit)
-			if err != nil {
-				return err
-			}
-			stderrLines := strings.Split(stderrBuf.String(), "\n")
-
-			outputTestcaseLines := strings.Split(output, "\n")
-
 			if recv.Time > 2000 {
 				testcaseResults.Status = "TLE"
+
 			} else {
 				if !recv.Result {
-					for j := 0; j < len(stderrLines); j++ {
-						println(stderrLines[j])
-					}
 					testcaseResults.Status = "RE"
+
 				} else {
-					testcaseResults.Status = "WA"
-					for j := 0; j < len(stdoutLines) && j < len(outputTestcaseLines); j++ {
+					stdoutBuf, err := dkrlib.CopyFromContainer(ctx, "/userStdout.txt", *submit)
+					if err != nil {
+						return err
+					}
+
+					if checklib.Normal(stdoutBuf.String(), output) {
 						testcaseResults.Status = "AC"
-						if strings.TrimSpace(stdoutLines[j]) != strings.TrimSpace(outputTestcaseLines[j]) {
-							testcaseResults.Status = "WA"
-							break
-						}
+					} else {
+						testcaseResults.Status = "WA"
 					}
 				}
 			}
