@@ -138,8 +138,6 @@ func sendResult(submit types.SubmitT) {
 		Update("execution_memory", submit.Result.ExecutionMemory).
 		Update("point", submit.Result.Point)
 
-	fmt.Println(submit.Result)
-
 	if submit.Result.Status == "CE" {
 		db.
 			Table("submits").
@@ -213,8 +211,6 @@ func compile(submit *types.SubmitT, sessionIDchan *chan types.CmdResultJSON) err
 	if err != nil {
 		return err
 	}
-
-	fmt.Println(recv.ErrMessage)
 
 	if len(recv.ErrMessage) < 65535 {
 		submit.Result.CompileError = recv.ErrMessage

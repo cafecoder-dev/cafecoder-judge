@@ -72,7 +72,7 @@ func RemoveContainer(ctx context.Context, submit types.SubmitT) {
 
 	_, _ = submit.ContainerCli.ContainersPrune(ctx, labelFilters)
 
-	fmt.Println("container: " + submit.ContainerID + " removed")
+	// fmt.Println("container: " + submit.ContainerID + " removed")
 }
 
 // CopyFromContainer ... コンテナからコピーしてくる
