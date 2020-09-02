@@ -6,7 +6,6 @@ import (
 	"archive/tar"
 	"bytes"
 	"context"
-	"fmt"
 	"io/ioutil"
 	"os"
 
