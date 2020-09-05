@@ -3,13 +3,15 @@ package judgelib
 import (
 	"context"
 	"fmt"
-	"github.com/jinzhu/gorm"
 	"os"
 	"strconv"
 	"time"
 
+	"github.com/jinzhu/gorm"
+
 	_ "github.com/go-sql-driver/mysql"
 
+	"github.com/cafecoder-dev/cafecoder-judge/src/checklib"
 	"github.com/cafecoder-dev/cafecoder-judge/src/cmdlib"
 	"github.com/cafecoder-dev/cafecoder-judge/src/dkrlib"
 	"github.com/cafecoder-dev/cafecoder-judge/src/gcplib"
@@ -17,7 +19,6 @@ import (
 	"github.com/cafecoder-dev/cafecoder-judge/src/sqllib"
 	"github.com/cafecoder-dev/cafecoder-judge/src/types"
 	"github.com/cafecoder-dev/cafecoder-judge/src/util"
-	"github.com/cafecoder-dev/cafecoder-judge/src/checklib"
 )
 
 var priorityMap = map[string]int{"WJ": 0, "WR": 1, "AC": 2, "TLE": 3, "MLE": 4, "OLE": 5, "WA": 6, "RE": 7, "CE": 8, "IE": 9}
@@ -234,7 +235,7 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 		return err
 	}
 	defer db.Close()
-
+	println("ok 1")
 	var testcases []types.TestcaseGORM
 	var testcasesNum = 0
 	db.
@@ -250,6 +251,7 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 			Where("submit_id = ? AND deleted_at IS NULL", submit.Info.ID).
 			Update("deleted_at", util.TimeToString(time.Now())) // todo gorm に追加
 	}
+	println("ok 2")
 
 	submit.Testcases = testcases
 
@@ -258,6 +260,7 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 		Table("problems").
 		Where("id = ? AND deleted_at IS NULL", submit.Info.ProblemID).
 		First(&problem)
+	println("ok 3")
 
 	for _, elem := range testcases {
 		testcaseResults := types.TestcaseResultsGORM{SubmitID: submit.Info.ID, TestcaseID: elem.TestcaseID}
@@ -267,9 +270,12 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 		if err != nil {
 			return err
 		}
+		println("ok 4")
 
 		file.Write(input)
 		file.Close()
+
+		println("ok 5")
 
 		if err = dkrlib.CopyToContainer(ctx, "./codes/"+submit.HashedID, "/testcase.txt", 0744, *submit); err != nil {
 			return err
@@ -279,6 +285,8 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 		if err != nil {
 			return err
 		}
+
+		println("ok 6")
 
 		if !recv.IsOLE {
 			if recv.Time > 2000 {
