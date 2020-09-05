@@ -208,10 +208,12 @@ func scoring(submit types.SubmitT) int64 {
 }
 
 func compile(submit *types.SubmitT, sessionIDchan *chan types.CmdResultJSON) error {
+	println("Requesting compiling...")
 	recv, err := cmdlib.RequestCmd(submit.CompileCmd, "other", *submit, sessionIDchan)
 	if err != nil {
 		return err
 	}
+	println(recv)
 
 	if len(recv.ErrMessage) < 65535 {
 		submit.Result.CompileError = recv.ErrMessage
