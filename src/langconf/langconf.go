@@ -18,11 +18,15 @@ func LangConfig(submit *types.SubmitT) error {
 		submit.CompileCmd = "g++-10 Main.cpp -O2 -lm -std=gnu++17 -o Main.out 2> userStderr.txt"
 		submit.ExecuteCmd = "./Main.out < testcase.txt > userStdout.txt 2> userStderr.txt"
 		submit.FileName = "Main.cpp"
-	case "cpp20_gcc10": //C++17
+	case "cpp17_gcc10_acl": //C++17 + ACL
+		submit.CompileCmd = "g++-10 Main.cpp -O2 -lm -std=gnu++17 -I . -o Main.out 2> userStderr.txt"
+		submit.ExecuteCmd = "./Main.out < testcase.txt > userStdout.txt 2> userStderr.txt"
+		submit.FileName = "Main.cpp"
+	case "cpp20_gcc10": //C++20
 		submit.CompileCmd = "g++-10 Main.cpp -O2 -lm -std=gnu++2a -o Main.out 2> userStderr.txt"
 		submit.ExecuteCmd = "./Main.out < testcase.txt > userStdout.txt 2> userStderr.txt"
 		submit.FileName = "Main.cpp"
-	case "java11": //java8
+	case "java11": //java11
 		submit.CompileCmd = "javac -encoding UTF-8 Main.java 2> userStderr.txt"
 		submit.ExecuteCmd = "java Main < testcase.txt > userStdout.txt 2> userStderr.txt"
 		submit.FileName = "Main.java"

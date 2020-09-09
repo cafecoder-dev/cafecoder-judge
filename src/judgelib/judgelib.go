@@ -213,7 +213,6 @@ func compile(submit *types.SubmitT, sessionIDchan *chan types.CmdResultJSON) err
 	if err != nil {
 		return err
 	}
-	println(recv)
 
 	if len(recv.ErrMessage) < 65535 {
 		submit.Result.CompileError = recv.ErrMessage
