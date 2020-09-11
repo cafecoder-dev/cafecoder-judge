@@ -1,11 +1,13 @@
 package cmdlib
 
 import (
-	"os"
-	"net"
-	"fmt"
-	"encoding/json"
 	"encoding/base64"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net"
+	"os"
+	"time"
 
 	"github.com/cafecoder-dev/cafecoder-judge/src/types"
 )
@@ -44,6 +46,8 @@ func RequestCmd(cmd string, mode string, submit types.SubmitT, sessionIDChan *ch
 	var (
 		request types.RequestJSON
 		recv    types.CmdResultJSON
+		start   time.Time
+		end     time.Time
 	)
 
 	containerConn, err := net.Dial("tcp", submit.ContainerInspect.NetworkSettings.IPAddress+":8887")
@@ -57,11 +61,27 @@ func RequestCmd(cmd string, mode string, submit types.SubmitT, sessionIDChan *ch
 		return recv, err
 	}
 
-	_, _ = containerConn.Write(b)
-	_ = containerConn.Close()
+	_, err = containerConn.Write(b)
+	if err != nil {
+		return recv, err
+	}
+	containerConn.Close()
+
+	start = time.Now()
 	for {
-		recv = <-*sessionIDChan
-		if recv.SessionID == fmt.Sprintf("%d", submit.Info.ID) {
+		tmp := <-*sessionIDChan
+		if tmp.SessionID == fmt.Sprintf("%d", submit.Info.ID) {
+			recv = tmp
+			break
+		}
+
+		end = time.Now()
+		if (end.Sub(start)).Milliseconds() >= 2000+5000 {
+			recv = types.CmdResultJSON{
+				SessionID: fmt.Sprintf("%d", submit.Info.ID),
+				Time:      int((end.Sub(start)).Milliseconds()),
+				IsPLE:     true,
+			}
 			break
 		}
 	}

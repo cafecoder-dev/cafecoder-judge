@@ -11,9 +11,9 @@ import (
 
 	"github.com/cafecoder-dev/cafecoder-judge/src/types"
 
+	docker_types "github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
-	docker_types "github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
 )
 
@@ -22,7 +22,6 @@ const apiVersion = "1.40"
 // CreateContainer ... コンテナを作成する
 func CreateContainer(ctx context.Context, submit *types.SubmitT) error {
 	var err error
-	// pidsLimit := int64(32)
 
 	submit.ContainerCli, err = client.NewClientWithOpts(client.WithVersion(apiVersion))
 
@@ -33,11 +32,10 @@ func CreateContainer(ctx context.Context, submit *types.SubmitT) error {
 
 	config := &container.Config{Image: "cafecoder"}
 	hostConfig := &container.HostConfig{
-		Resources: container.Resources {
-			Memory: 2048000000, // メモリの制限: 2048 MB
-			// PidsLimit: &pidsLimit,		// プロセス数の制限: 32 個まで
+		Resources: container.Resources{
+			Memory:    2048000000, // メモリの制限: 2048 MB
 		},
-	}	
+	}
 
 	resp, err := submit.ContainerCli.ContainerCreate(ctx, config, hostConfig, nil, nil, submit.HashedID)
 	if err != nil {
@@ -50,7 +48,6 @@ func CreateContainer(ctx context.Context, submit *types.SubmitT) error {
 		return err
 	}
 
-
 	submit.ContainerInspect, err = submit.ContainerCli.ContainerInspect(ctx, submit.ContainerID)
 	if err != nil {
 		return err
@@ -62,8 +59,8 @@ func CreateContainer(ctx context.Context, submit *types.SubmitT) error {
 func RemoveContainer(ctx context.Context, submit types.SubmitT) {
 	submit.ContainerCli.ContainerStop(ctx, submit.ContainerID, nil)
 	submit.ContainerCli.ContainerRemove(
-		ctx, 
-		submit.ContainerID, 
+		ctx,
+		submit.ContainerID,
 		docker_types.ContainerRemoveOptions{RemoveVolumes: true, RemoveLinks: true, Force: true},
 	)
 

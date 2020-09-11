@@ -8,6 +8,7 @@ type CmdResultJSON struct {
 	MemUsage   int    `json:"memUsage"`
 	IsOLE      bool   `json:"isOLE"`
 	StdoutSize int64  `json:"stdoutSize"`
+	IsPLE      bool   `json:"isPLE"`
 }
 
 type RequestJSON struct {
