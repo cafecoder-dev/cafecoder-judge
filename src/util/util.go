@@ -15,7 +15,7 @@ func ValidationCheck(args types.SubmitsGORM) bool {
 		return false
 	}
 	return true
-	//"Inputs are included another characters[0-9],[a-z],[A-Z],'.','/','_'"
+	//"Inputs are included another characters[0-9], [a-z], [A-Z], '.', '/', '_'"
 }
 
 func CheckRegexp(reg, str string) bool {

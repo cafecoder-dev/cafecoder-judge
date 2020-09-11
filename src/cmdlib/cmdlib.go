@@ -3,7 +3,8 @@ package cmdlib
 import (
 	"encoding/base64"
 	"encoding/json"
-	"errors"
+
+	// "errors"
 	"fmt"
 	"net"
 	"os"
@@ -67,24 +68,20 @@ func RequestCmd(cmd string, mode string, submit types.SubmitT, sessionIDChan *ch
 	}
 	containerConn.Close()
 
-	start = time.Now()
+	timeout := time.After(10 * time.Second)
 	for {
-		tmp := <-*sessionIDChan
-		if tmp.SessionID == fmt.Sprintf("%d", submit.Info.ID) {
-			recv = tmp
-			break
-		}
-
-		end = time.Now()
-		if (end.Sub(start)).Milliseconds() >= 2000+5000 {
-			recv = types.CmdResultJSON{
+		select {
+		case <-timeout:
+			fmt.Println("Request timeout")
+			return types.CmdResultJSON{
 				SessionID: fmt.Sprintf("%d", submit.Info.ID),
 				Time:      int((end.Sub(start)).Milliseconds()),
 				IsPLE:     true,
+			}, nil
+		case tmp := <-*sessionIDChan:
+			if tmp.SessionID == fmt.Sprintf("%d", submit.Info.ID) {
+				return tmp, nil
 			}
-			break
 		}
 	}
-
-	return recv, nil
 }

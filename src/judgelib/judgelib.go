@@ -78,7 +78,6 @@ func Judge(args types.SubmitsGORM, cmdChickets *types.CmdTicket) {
 		sendResult(submit)
 		return
 	}
-	defer dkrlib.RemoveContainer(ctx, submit)
 
 	if err := dkrlib.CopyToContainer(ctx, codePath, submit.FileName, 0777, submit); err != nil {
 		fmt.Printf("%s\n", err.Error())
@@ -104,6 +103,7 @@ func Judge(args types.SubmitsGORM, cmdChickets *types.CmdTicket) {
 		sendResult(submit)
 		return
 	}
+	dkrlib.RemoveContainer(ctx, submit)
 
 	sendResult(submit)
 
@@ -208,11 +208,12 @@ func scoring(submit types.SubmitT) int64 {
 }
 
 func compile(submit *types.SubmitT, sessionIDchan *chan types.CmdResultJSON) error {
-	// println("Requesting compiling...")
 	recv, err := cmdlib.RequestCmd(submit.CompileCmd, "other", *submit, sessionIDchan)
 	if err != nil {
 		return err
 	}
+
+	fmt.Println("Compile Result: ", recv)
 
 	if len(recv.ErrMessage) < 65535 {
 		submit.Result.CompileError = recv.ErrMessage
@@ -229,7 +230,6 @@ func compile(submit *types.SubmitT, sessionIDchan *chan types.CmdResultJSON) err
 
 func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan types.CmdResultJSON) error {
 	var (
-		isPLE bool
 		testcases []types.TestcaseGORM
 		testcasesNum = 0
 	)
@@ -242,7 +242,6 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 	}
 	defer db.Close()
 
-	
 	db.
 		Table("testcases").
 		Where("problem_id=? AND deleted_at IS NULL", strconv.FormatInt(submit.Info.ProblemID, 10)).
@@ -254,7 +253,7 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 		db.
 			Table("testcase_results").
 			Where("submit_id = ? AND deleted_at IS NULL", submit.Info.ID).
-			Update("deleted_at", util.TimeToString(time.Now())) // todo gorm に追加
+			Update("deleted_at", util.TimeToString(time.Now()))
 	}
 
 	submit.Testcases = testcases
@@ -267,18 +266,6 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 
 	for _, elem := range testcases {
 		testcaseResults := types.TestcaseResultsGORM{SubmitID: submit.Info.ID, TestcaseID: elem.TestcaseID}
-
-		if isPLE {
-			testcaseResults.ExecutionTime = 2200
-			testcaseResults.ExecutionMemory = 0
-			testcaseResults.CreatedAt = util.TimeToString(time.Now())
-			testcaseResults.UpdatedAt = util.TimeToString(time.Now())
-			// testcaseResults.Status = "PLE"
-			testcaseResults.Status = "TLE"
-			db.Table("testcase_results").Create(&testcaseResults)
-			submit.TestcaseResultsMap[testcaseResults.TestcaseID] = testcaseResults
-			continue
-		}
 
 		file, _ := os.Create("./codes/" + submit.HashedID)
 		input, output, err := gcplib.DownloadTestcase(ctx, problem.UUID, elem.Name)
@@ -298,17 +285,27 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 			return err
 		}
 
+		fmt.Println("Testcase Result: ", recv)
+
 		if recv.IsPLE {
-			testcaseResults.ExecutionTime = 2200
-			testcaseResults.ExecutionMemory = 0
-			testcaseResults.CreatedAt = util.TimeToString(time.Now())
-			testcaseResults.UpdatedAt = util.TimeToString(time.Now())
-			// testcaseResults.Status = "PLE"
-			testcaseResults.Status = "TLE"
-			isPLE = true
-			db.Table("testcase_results").Create(&testcaseResults)
-			submit.TestcaseResultsMap[testcaseResults.TestcaseID] = testcaseResults
-			continue
+			submit.Result.Status = "TLE"
+			db.
+				Table("submits").
+				Where("id = ? AND deleted_at IS NULL", submit.Info.ID).
+				Update("status", submit.Result.Status)
+			for i := 0 ; i < len(testcases) ; i++ {
+				testcaseResults := types.TestcaseResultsGORM{SubmitID: submit.Info.ID, TestcaseID: elem.TestcaseID}
+				testcaseResults.ExecutionTime = 2200
+				testcaseResults.ExecutionMemory = 0
+				testcaseResults.CreatedAt = util.TimeToString(time.Now())
+				testcaseResults.UpdatedAt = util.TimeToString(time.Now())
+				// testcaseResults.Status = "PLE"
+				testcaseResults.Status = "TLE"
+				db.Table("testcase_results").Create(&testcaseResults)
+				
+				submit.TestcaseResultsMap[testcaseResults.TestcaseID] = testcaseResults
+			}
+			return nil
 		}
 
 		if !recv.IsOLE {

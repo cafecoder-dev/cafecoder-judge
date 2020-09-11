@@ -1,8 +1,8 @@
 package sqllib
 
 import (
-	"os"
 	"fmt"
+	"os"
 
 	// mysql driver
 	_ "github.com/go-sql-driver/mysql"

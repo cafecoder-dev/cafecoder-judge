@@ -39,11 +39,11 @@ func LangConfig(submit *types.SubmitT) error {
 		submit.ExecuteCmd = "mono Main.exe < testcase.txt > userStdout.txt 2> userStderr.txt"
 		submit.FileName = "Main.cs"
 	case "cs_dotnet31": // C#
-		submit.CompileCmd = "mkdir main && cd main && dotnet new console && mv ./../Main.cs Program.cs && dotnet publish -c Release --nologo -v q -o . 2>> ../userStderr.txt && cd /"
-		submit.ExecuteCmd = "dotnet ./main/main.dll < testcase.txt > userStdout.txt 2> userStderr.txt"
+		submit.CompileCmd = "cd Main && dotnet new console && mv ./../Main.cs Program.cs && dotnet publish -c Release --nologo -v q -o . 2>> ../userStderr.txt && cd /"
+		submit.ExecuteCmd = "dotnet ./Main/Main.dll < testcase.txt > userStdout.txt 2> userStderr.txt"
 		submit.FileName = "Main.cs"
 	case "go_114": //golang
-		submit.CompileCmd = "export PATH=$PATH:/usr/local/go/bin && mkdir Main && mv Main.go Main && cd Main && go build . 2> ../userStderr.txt"
+		submit.CompileCmd = "export PATH=$PATH:/usr/local/go/bin && mv Main.go Main && cd Main && go build Main.go 2> ../userStderr.txt"
 		submit.ExecuteCmd = "./Main/Main < testcase.txt > userStdout.txt 2> userStderr.txt"
 		submit.FileName = "Main.go"
 	case "nim":
