@@ -21,11 +21,11 @@ import (
 	"github.com/cafecoder-dev/cafecoder-judge/src/util"
 )
 
-var priorityMap = map[string]int{"WJ": 0, "WR": 1, "AC": 2, "TLE": 3, "MLE": 4, "OLE": 5, "WA": 6, "RE": 7, "CE": 8, "IE": 9}
+var priorityMap = map[string]int{"-": 0, "AC": 2, "TLE": 3, "MLE": 4, "OLE": 5, "WA": 6, "RE": 7, "CE": 8, "IE": 9}
 
 // Judge ... ジャッジのフロー
 func Judge(args types.SubmitsGORM, cmdChickets *types.CmdTicket) {
-	var submit = types.SubmitT{}
+	var submit = types.SubmitT{Result: types.ResultGORM{Status: "WJ"}}
 	submit.TestcaseResultsMap = map[int64]types.TestcaseResultsGORM{}
 	ctx := context.Background()
 
@@ -232,10 +232,8 @@ func compile(submit *types.SubmitT, sessionIDchan *chan types.CmdResultJSON) err
 func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan types.CmdResultJSON) error {
 	var (
 		testcases []types.TestcaseGORM
-		testcasesNum = 0
+		problem   types.ProblemsGORM
 	)
-
-	submit.Result.Status = "-"
 
 	db, err := sqllib.NewDB()
 	if err != nil {
@@ -247,8 +245,9 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 		Table("testcases").
 		Where("problem_id=? AND deleted_at IS NULL", strconv.FormatInt(submit.Info.ProblemID, 10)).
 		Order("id").
-		Find(&testcases).
-		Count(&testcasesNum)
+		Find(&testcases)
+
+	submit.Testcases = testcases
 
 	if submit.Info.Status == "WR" {
 		db.
@@ -257,9 +256,6 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 			Update("deleted_at", util.TimeToString(time.Now()))
 	}
 
-	submit.Testcases = testcases
-
-	var problem types.ProblemsGORM
 	db.
 		Table("problems").
 		Where("id = ? AND deleted_at IS NULL", submit.Info.ProblemID).
@@ -273,7 +269,6 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 		if err != nil {
 			return err
 		}
-
 		file.Write(input)
 		file.Close()
 
@@ -288,51 +283,23 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 
 		fmt.Println("Testcase Result: ", recv)
 
-		if recv.IsPLE {
-			submit.Result.Status = "TLE"
-			db.
-				Table("submits").
-				Where("id = ? AND deleted_at IS NULL", submit.Info.ID).
-				Update("status", submit.Result.Status)
-			for i := 0 ; i < len(testcases) ; i++ {
+		testcaseResults.Status, err = judging(ctx, submit, recv, output)
+		if err != nil {
+			return err
+		}
+
+		if testcaseResults.Status == "PLE" {
+			for range testcases {
 				testcaseResults := types.TestcaseResultsGORM{SubmitID: submit.Info.ID, TestcaseID: elem.TestcaseID}
 				testcaseResults.ExecutionTime = 2200
-				testcaseResults.ExecutionMemory = 0
 				testcaseResults.CreatedAt = util.TimeToString(time.Now())
 				testcaseResults.UpdatedAt = util.TimeToString(time.Now())
-				// testcaseResults.Status = "PLE"
 				testcaseResults.Status = "TLE"
+				submit.Result.Status = "TLE"
 				db.Table("testcase_results").Create(&testcaseResults)
-				
 				submit.TestcaseResultsMap[testcaseResults.TestcaseID] = testcaseResults
 			}
 			return nil
-		}
-
-		if !recv.IsOLE {
-			if recv.Time > 2000 {
-				testcaseResults.Status = "TLE"
-
-			} else {
-				if !recv.Result {
-					testcaseResults.Status = "RE"
-
-				} else {
-					stdoutBuf, err := dkrlib.CopyFromContainer(ctx, "/userStdout.txt", *submit)
-					if err != nil {
-						return err
-					}
-
-					if checklib.Normal(stdoutBuf.String(), output) {
-						testcaseResults.Status = "AC"
-					} else {
-						testcaseResults.Status = "WA"
-					}
-				}
-			}
-
-		} else {
-			testcaseResults.Status = "OLE"
 		}
 
 		if priorityMap[submit.Result.Status] < priorityMap[testcaseResults.Status] {
@@ -360,4 +327,30 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 	}
 
 	return nil
+}
+
+func judging(ctx context.Context, submit *types.SubmitT, cmdres types.CmdResultJSON, output string) (string, error) {
+	if cmdres.IsPLE {
+		return "PLE", nil
+	}
+	if !cmdres.Result {
+		return "RE", nil
+	}
+	stdoutBuf, err := dkrlib.CopyFromContainer(ctx, "/userStdout.txt", *submit)
+	if err != nil {
+		return "", err
+	}
+	if !checklib.Normal(stdoutBuf.String(), output) {
+		return "WA", nil
+	}
+	if cmdres.IsOLE {
+		return "OLE", nil
+	}
+	if cmdres.MemUsage > 1024000 {
+		return "MLE", nil
+	}
+	if cmdres.Time > 2000 {
+		return "TLE", nil
+	}
+	return "AC", nil
 }
