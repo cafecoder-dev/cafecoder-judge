@@ -78,6 +78,7 @@ func Judge(args types.SubmitsGORM, cmdChickets *types.CmdTicket) {
 		sendResult(submit)
 		return
 	}
+	defer dkrlib.RemoveContainer(ctx, submit)
 
 	if err := dkrlib.CopyToContainer(ctx, codePath, submit.FileName, 0777, submit); err != nil {
 		fmt.Printf("%s\n", err.Error())
@@ -96,6 +97,7 @@ func Judge(args types.SubmitsGORM, cmdChickets *types.CmdTicket) {
 		sendResult(submit)
 		return
 	}
+	time.Sleep(time.Second * 3) // testlib.h
 
 	if err = tryTestcase(ctx, &submit, &sessionIDChan); err != nil {
 		fmt.Printf("%s\n", err.Error())
@@ -103,7 +105,6 @@ func Judge(args types.SubmitsGORM, cmdChickets *types.CmdTicket) {
 		sendResult(submit)
 		return
 	}
-	dkrlib.RemoveContainer(ctx, submit)
 
 	sendResult(submit)
 
