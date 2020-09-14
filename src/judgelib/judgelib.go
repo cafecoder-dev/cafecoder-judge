@@ -2,6 +2,7 @@ package judgelib
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -25,7 +26,7 @@ var priorityMap = map[string]int{"-": 0, "AC": 2, "TLE": 3, "MLE": 4, "OLE": 5, 
 
 // Judge ... ジャッジのフロー
 func Judge(args types.SubmitsGORM, cmdChickets *types.CmdTicket) {
-	var submit = types.SubmitT{Result: types.ResultGORM{Status: "WJ"}}
+	var submit = types.SubmitT{Result: types.ResultGORM{Status: "-"}}
 	submit.TestcaseResultsMap = map[int64]types.TestcaseResultsGORM{}
 	ctx := context.Background()
 
@@ -175,7 +176,7 @@ func scoring(submit types.SubmitT) int64 {
 	db.
 		Table("testcase_testcase_sets").
 		Joins("INNER JOIN testcases ON testcase_testcase_sets.testcase_id = testcases.id").
-		Where("problem_id=? AND testcase_testcase_sets.deleted_at IS NULL", submit.Info.ProblemID).
+		Where("problem_id=? AND testcase_testcase_sets.deleted_at IS NULL AND testcases.deleted_at IS NULL", submit.Info.ProblemID).
 		Find(&testcaseTestcaseSets)
 
 	// testcase_set_id -> testcase_id
@@ -246,7 +247,9 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 		Where("problem_id=? AND deleted_at IS NULL", strconv.FormatInt(submit.Info.ProblemID, 10)).
 		Order("id").
 		Find(&testcases)
-
+	if len(testcases) == 0 {
+		return errors.New("not found testcases")
+	}
 	submit.Testcases = testcases
 
 	if submit.Info.Status == "WR" {
@@ -280,8 +283,6 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 		if err != nil {
 			return err
 		}
-
-		fmt.Println("Testcase Result: ", recv)
 
 		testcaseResults.Status, err = judging(ctx, submit, recv, output)
 		if err != nil {
@@ -317,6 +318,8 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 		testcaseResults.ExecutionMemory = recv.MemUsage
 		testcaseResults.CreatedAt = util.TimeToString(time.Now())
 		testcaseResults.UpdatedAt = util.TimeToString(time.Now())
+
+		fmt.Println("Testcase Result: ", recv)
 
 		// testcase_results の挿入
 		db.
