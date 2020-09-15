@@ -2,14 +2,17 @@ package judgelib
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"github.com/jinzhu/gorm"
 	"os"
 	"strconv"
 	"time"
 
+	"github.com/jinzhu/gorm"
+
 	_ "github.com/go-sql-driver/mysql"
 
+	"github.com/cafecoder-dev/cafecoder-judge/src/checklib"
 	"github.com/cafecoder-dev/cafecoder-judge/src/cmdlib"
 	"github.com/cafecoder-dev/cafecoder-judge/src/dkrlib"
 	"github.com/cafecoder-dev/cafecoder-judge/src/gcplib"
@@ -17,14 +20,13 @@ import (
 	"github.com/cafecoder-dev/cafecoder-judge/src/sqllib"
 	"github.com/cafecoder-dev/cafecoder-judge/src/types"
 	"github.com/cafecoder-dev/cafecoder-judge/src/util"
-	"github.com/cafecoder-dev/cafecoder-judge/src/checklib"
 )
 
-var priorityMap = map[string]int{"WJ": 0, "WR": 1, "AC": 2, "TLE": 3, "MLE": 4, "OLE": 5, "WA": 6, "RE": 7, "CE": 8, "IE": 9}
+var priorityMap = map[string]int{"-": 0, "AC": 2, "TLE": 3, "MLE": 4, "OLE": 5, "WA": 6, "RE": 7, "CE": 8, "IE": 9}
 
 // Judge ... ジャッジのフロー
 func Judge(args types.SubmitsGORM, cmdChickets *types.CmdTicket) {
-	var submit = types.SubmitT{}
+	var submit = types.SubmitT{Result: types.ResultGORM{Status: "-"}}
 	submit.TestcaseResultsMap = map[int64]types.TestcaseResultsGORM{}
 	ctx := context.Background()
 
@@ -96,6 +98,7 @@ func Judge(args types.SubmitsGORM, cmdChickets *types.CmdTicket) {
 		sendResult(submit)
 		return
 	}
+	time.Sleep(time.Second * 3) // testlib.h
 
 	if err = tryTestcase(ctx, &submit, &sessionIDChan); err != nil {
 		fmt.Printf("%s\n", err.Error())
@@ -138,8 +141,6 @@ func sendResult(submit types.SubmitT) {
 		Update("execution_memory", submit.Result.ExecutionMemory).
 		Update("point", submit.Result.Point)
 
-	fmt.Println(submit.Result)
-
 	if submit.Result.Status == "CE" {
 		db.
 			Table("submits").
@@ -175,7 +176,7 @@ func scoring(submit types.SubmitT) int64 {
 	db.
 		Table("testcase_testcase_sets").
 		Joins("INNER JOIN testcases ON testcase_testcase_sets.testcase_id = testcases.id").
-		Where("problem_id=? AND testcase_testcase_sets.deleted_at IS NULL", submit.Info.ProblemID).
+		Where("problem_id=? AND testcase_testcase_sets.deleted_at IS NULL AND testcases.deleted_at IS NULL", submit.Info.ProblemID).
 		Find(&testcaseTestcaseSets)
 
 	// testcase_set_id -> testcase_id
@@ -214,7 +215,7 @@ func compile(submit *types.SubmitT, sessionIDchan *chan types.CmdResultJSON) err
 		return err
 	}
 
-	fmt.Println(recv.ErrMessage)
+	fmt.Println("Compile Result: ", recv)
 
 	if len(recv.ErrMessage) < 65535 {
 		submit.Result.CompileError = recv.ErrMessage
@@ -230,8 +231,10 @@ func compile(submit *types.SubmitT, sessionIDchan *chan types.CmdResultJSON) err
 }
 
 func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan types.CmdResultJSON) error {
-
-	submit.Result.Status = "-"
+	var (
+		testcases []types.TestcaseGORM
+		problem   types.ProblemsGORM
+	)
 
 	db, err := sqllib.NewDB()
 	if err != nil {
@@ -239,25 +242,23 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 	}
 	defer db.Close()
 
-	var testcases []types.TestcaseGORM
-	var testcasesNum = 0
 	db.
 		Table("testcases").
 		Where("problem_id=? AND deleted_at IS NULL", strconv.FormatInt(submit.Info.ProblemID, 10)).
 		Order("id").
-		Find(&testcases).
-		Count(&testcasesNum)
+		Find(&testcases)
+	if len(testcases) == 0 {
+		return errors.New("not found testcases")
+	}
+	submit.Testcases = testcases
 
 	if submit.Info.Status == "WR" {
 		db.
 			Table("testcase_results").
 			Where("submit_id = ? AND deleted_at IS NULL", submit.Info.ID).
-			Update("deleted_at", util.TimeToString(time.Now())) // todo gorm に追加
+			Update("deleted_at", util.TimeToString(time.Now()))
 	}
 
-	submit.Testcases = testcases
-
-	var problem types.ProblemsGORM
 	db.
 		Table("problems").
 		Where("id = ? AND deleted_at IS NULL", submit.Info.ProblemID).
@@ -271,7 +272,6 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 		if err != nil {
 			return err
 		}
-
 		file.Write(input)
 		file.Close()
 
@@ -284,30 +284,23 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 			return err
 		}
 
-		if !recv.IsOLE {
-			if recv.Time > 2000 {
+		testcaseResults.Status, err = judging(ctx, submit, recv, output)
+		if err != nil {
+			return err
+		}
+
+		if testcaseResults.Status == "PLE" {
+			for range testcases {
+				testcaseResults := types.TestcaseResultsGORM{SubmitID: submit.Info.ID, TestcaseID: elem.TestcaseID}
+				testcaseResults.ExecutionTime = 2200
+				testcaseResults.CreatedAt = util.TimeToString(time.Now())
+				testcaseResults.UpdatedAt = util.TimeToString(time.Now())
 				testcaseResults.Status = "TLE"
-
-			} else {
-				if !recv.Result {
-					testcaseResults.Status = "RE"
-
-				} else {
-					stdoutBuf, err := dkrlib.CopyFromContainer(ctx, "/userStdout.txt", *submit)
-					if err != nil {
-						return err
-					}
-
-					if checklib.Normal(stdoutBuf.String(), output) {
-						testcaseResults.Status = "AC"
-					} else {
-						testcaseResults.Status = "WA"
-					}
-				}
+				submit.Result.Status = "TLE"
+				db.Table("testcase_results").Create(&testcaseResults)
+				submit.TestcaseResultsMap[testcaseResults.TestcaseID] = testcaseResults
 			}
-
-		} else {
-			testcaseResults.Status = "OLE"
+			return nil
 		}
 
 		if priorityMap[submit.Result.Status] < priorityMap[testcaseResults.Status] {
@@ -326,6 +319,8 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 		testcaseResults.CreatedAt = util.TimeToString(time.Now())
 		testcaseResults.UpdatedAt = util.TimeToString(time.Now())
 
+		fmt.Println("Testcase Result: ", recv)
+
 		// testcase_results の挿入
 		db.
 			Table("testcase_results").
@@ -335,4 +330,30 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 	}
 
 	return nil
+}
+
+func judging(ctx context.Context, submit *types.SubmitT, cmdres types.CmdResultJSON, output string) (string, error) {
+	if cmdres.IsPLE {
+		return "PLE", nil
+	}
+	if !cmdres.Result {
+		return "RE", nil
+	}
+	stdoutBuf, err := dkrlib.CopyFromContainer(ctx, "/userStdout.txt", *submit)
+	if err != nil {
+		return "", err
+	}
+	if !checklib.Normal(stdoutBuf.String(), output) {
+		return "WA", nil
+	}
+	if cmdres.IsOLE {
+		return "OLE", nil
+	}
+	if cmdres.MemUsage > 1024000 {
+		return "MLE", nil
+	}
+	if cmdres.Time > 2000 {
+		return "TLE", nil
+	}
+	return "AC", nil
 }

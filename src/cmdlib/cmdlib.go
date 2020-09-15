@@ -1,11 +1,14 @@
 package cmdlib
 
 import (
-	"os"
-	"net"
-	"fmt"
-	"encoding/json"
 	"encoding/base64"
+	"encoding/json"
+
+	// "errors"
+	"fmt"
+	"net"
+	"os"
+	"time"
 
 	"github.com/cafecoder-dev/cafecoder-judge/src/types"
 )
@@ -28,8 +31,6 @@ func ManageCmds(cmdChickets *types.CmdTicket) {
 			cnct.Close()
 
 			data, _ := base64.StdEncoding.DecodeString(cmdResult.ErrMessage)
-
-			fmt.Println(cmdResult)
 
 			cmdResult.ErrMessage = string(data)
 			go func() {
@@ -59,14 +60,26 @@ func RequestCmd(cmd string, mode string, submit types.SubmitT, sessionIDChan *ch
 		return recv, err
 	}
 
-	_, _ = containerConn.Write(b)
-	_ = containerConn.Close()
+	_, err = containerConn.Write(b)
+	if err != nil {
+		return recv, err
+	}
+	containerConn.Close()
+
+	timeout := time.After(10 * time.Second)
 	for {
-		recv = <-*sessionIDChan
-		if recv.SessionID == fmt.Sprintf("%d", submit.Info.ID) {
-			break
+		select {
+		case <-timeout:
+			fmt.Println("Request timeout")
+			return types.CmdResultJSON{
+				SessionID: fmt.Sprintf("%d", submit.Info.ID),
+				Time:      2200,
+				IsPLE:     true,
+			}, nil
+		case recv := <-*sessionIDChan:
+			if recv.SessionID == fmt.Sprintf("%d", submit.Info.ID) {
+				return recv, nil
+			}
 		}
 	}
-
-	return recv, nil
 }
