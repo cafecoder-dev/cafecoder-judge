@@ -10,7 +10,8 @@ type CmdResultJSON struct {
 	StdoutSize int64  `json:"stdoutSize"`
 	IsPLE      bool   `json:"isPLE"`
 
-	Status string `json:"status"`
+	Status     string `json:"status"`
+	UserStderr string `json:"userStderr"`
 }
 
 type RequestJSON struct {
@@ -19,5 +20,5 @@ type RequestJSON struct {
 	Mode      string `json:"mode"` //Mode ... "judge" or "compile" or "download"
 	DirName   string `json:"dirName"`
 	CodePath  string `json:"codePath"`
-	Filename string `json:"filename"`
+	Filename  string `json:"filename"`
 }
