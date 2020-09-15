@@ -11,6 +11,7 @@ type CmdResultJSON struct {
 	IsPLE      bool   `json:"isPLE"`
 
 	Status string `json:"status"`
+	Filename string `json:"filename"`
 }
 
 type RequestJSON struct {
