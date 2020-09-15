@@ -47,8 +47,6 @@ func RequestCmd(cmd string, mode string, submit types.SubmitT, sessionIDChan *ch
 	var (
 		request types.RequestJSON
 		recv    types.CmdResultJSON
-		start   time.Time
-		end     time.Time
 	)
 
 	containerConn, err := net.Dial("tcp", submit.ContainerInspect.NetworkSettings.IPAddress+":8887")
@@ -75,12 +73,12 @@ func RequestCmd(cmd string, mode string, submit types.SubmitT, sessionIDChan *ch
 			fmt.Println("Request timeout")
 			return types.CmdResultJSON{
 				SessionID: fmt.Sprintf("%d", submit.Info.ID),
-				Time:      int((end.Sub(start)).Milliseconds()),
+				Time:      2200,
 				IsPLE:     true,
 			}, nil
-		case tmp := <-*sessionIDChan:
-			if tmp.SessionID == fmt.Sprintf("%d", submit.Info.ID) {
-				return tmp, nil
+		case recv := <-*sessionIDChan:
+			if recv.SessionID == fmt.Sprintf("%d", submit.Info.ID) {
+				return recv, nil
 			}
 		}
 	}

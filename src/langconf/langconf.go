@@ -43,7 +43,7 @@ func LangConfig(submit *types.SubmitT) error {
 		submit.ExecuteCmd = "dotnet ./Main/Main.dll < testcase.txt > userStdout.txt 2> userStderr.txt"
 		submit.FileName = "Main.cs"
 	case "go_114": //golang
-		submit.CompileCmd = "export PATH=$PATH:/usr/local/go/bin && mv Main.go Main && cd Main && go build Main.go 2> ../userStderr.txt"
+		submit.CompileCmd = "mv Main.go Main && cd Main && go build Main.go 2> ../userStderr.txt"
 		submit.ExecuteCmd = "./Main/Main < testcase.txt > userStdout.txt 2> userStderr.txt"
 		submit.FileName = "Main.go"
 	case "nim":
@@ -51,7 +51,7 @@ func LangConfig(submit *types.SubmitT) error {
 		submit.ExecuteCmd = "./Main.out < testcase.txt > userStdout.txt 2> userStderr.txt"
 		submit.FileName = "Main.nim"
 	case "rust_115":
-		submit.CompileCmd = "export PATH=\"$HOME/.cargo/bin:$PATH\" 2> userStderr.txt && rustc -O -o Main.out Main.rs 2> userStderr.txt"
+		submit.CompileCmd = "rustc -O -o Main.out Main.rs 2> userStderr.txt"
 		submit.ExecuteCmd = "./Main.out < testcase.txt > userStdout.txt 2> userStderr.txt"
 		submit.FileName = "Main.rs"
 	default:
