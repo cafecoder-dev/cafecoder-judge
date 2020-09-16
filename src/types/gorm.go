@@ -14,13 +14,13 @@ type ResultGORM struct {
 }
 
 type TestcaseResultsGORM struct {
-	SubmitID        int64  `gorm:"column:submit_id"`
-	TestcaseID      int64  `gorm:"column:testcase_id"`
-	Status          string `gorm:"column:status"`
-	ExecutionTime   int    `gorm:"column:execution_time"`
-	ExecutionMemory int    `gorm:"column:execution_memory"`
-	CreatedAt       string `gorm:"column:created_at"`
-	UpdatedAt       string `gorm:"column:updated_at"`
+	SubmitID        int64  `gorm:"column:submit_id" json:"submit_id"`
+	TestcaseID      int64  `gorm:"column:testcase_id" json:"testcase_id"`
+	Status          string `gorm:"column:status" json:"status"`
+	ExecutionTime   int    `gorm:"column:execution_time" json:"execution_time"`
+	ExecutionMemory int    `gorm:"column:execution_memory" json:"execution_memory"`
+	CreatedAt       string `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt       string `gorm:"column:updated_at" json:"updated_at"`
 }
 
 type TestcaseGORM struct {

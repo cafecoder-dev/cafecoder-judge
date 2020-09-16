@@ -22,6 +22,7 @@ type RequestJSON struct {
 	SessionID string `json:"sessionID"`
 	Cmd       string `json:"cmd"`
 	Mode      string `json:"mode"` //Mode ... "judge" or "compile" or "download"
-	DirName   string `json:"dirName"`
 	CodePath  string `json:"codePath"`
+	Filename  string `json:"filename"`
+	ProblemID string `json:"problemID"`
 }
