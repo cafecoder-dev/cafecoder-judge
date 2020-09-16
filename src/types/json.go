@@ -1,28 +1,27 @@
 package types
 
-import "github.com/cafecoder-dev/cafecoder-judge/src/types"
-
 type CmdResultJSON struct {
 	SessionID  string `json:"sessionID"`
 	Time       int    `json:"time"`
 	Result     bool   `json:"result"`
 	ErrMessage string `json:"errMessage"`
 	MemUsage   int    `json:"memUsage"`
-	IsOLE      bool   `json:"isOLE"`
 	StdoutSize int64  `json:"stdoutSize"`
 	IsPLE      bool   `json:"isPLE"`
 
 	Status   string `json:"status"`
 	Filename string `json:"filename"`
 
-	Testcases types.TestcaseResultsGORM
+	TestcaseResults TestcaseResultsGORM `json:"testcase_results"`
 }
 
 type RequestJSON struct {
-	SessionID string `json:"sessionID"`
-	Cmd       string `json:"cmd"`
-	Mode      string `json:"mode"` //Mode ... "judge" or "compile" or "download"
-	CodePath  string `json:"codePath"`
-	Filename  string `json:"filename"`
-	ProblemID string `json:"problemID"`
+	Mode      string       `json:"mode"` //Mode ... "judge" or "compile" or "download"
+	SessionID string       `json:"sessionID"`
+	Cmd       string       `json:"cmd"`
+	CodePath  string       `json:"codePath"`
+	Filename  string       `json:"filename"`
+	ProblemID string       `json:"problemID"`
+	Testcase  TestcaseGORM `json:"testcase"`
+	Problem   ProblemsGORM `json:"problem"`
 }

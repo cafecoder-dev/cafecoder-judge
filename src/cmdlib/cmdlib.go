@@ -47,9 +47,8 @@ func ManageCmds(cmdChickets *types.CmdTicket) {
 	}
 }
 
-func RequestCmd(cmdRequest CmdRequest, containerIPAddress string, sessionID string, sessionIDChan *chan types.CmdResultJSON) (types.CmdResultJSON, error) {
+func RequestCmd(request types.RequestJSON, containerIPAddress string, sessionIDChan *chan types.CmdResultJSON) (types.CmdResultJSON, error) {
 	var (
-		request types.RequestJSON
 		recv    types.CmdResultJSON
 	)
 
@@ -58,7 +57,6 @@ func RequestCmd(cmdRequest CmdRequest, containerIPAddress string, sessionID stri
 		return recv, err
 	}
 
-	request = types.RequestJSON{Cmd: cmdRequest.Cmd, SessionID: sessionID, Mode: cmdRequest.Mode}
 	b, err := json.Marshal(request)
 	if err != nil {
 		return recv, err
@@ -76,12 +74,12 @@ func RequestCmd(cmdRequest CmdRequest, containerIPAddress string, sessionID stri
 		case <-timeout:
 			fmt.Println("Request timeout")
 			return types.CmdResultJSON{
-				SessionID: sessionID,
+				SessionID: request.SessionID,
 				Time:      2200,
 				IsPLE:     true,
 			}, nil
 		case recv := <-*sessionIDChan:
-			if recv.SessionID == sessionID {
+			if recv.SessionID == request.SessionID {
 				return recv, nil
 			}
 		}
