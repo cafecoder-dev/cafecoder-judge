@@ -42,7 +42,7 @@ func LangConfig(submit *types.SubmitT) error {
 		submit.CompileCmd = "cd Main && dotnet new console && mv ./../Main.cs Program.cs && dotnet publish -c Release --nologo -v q -o . 2>> ../userStderr.txt && cd /"
 		submit.ExecuteCmd = "dotnet ./Main/Main.dll < testcase.txt > userStdout.txt 2> userStderr.txt"
 		submit.FileName = "Main.cs"
-	case "go_114": //golang
+	case "go_115": //golang
 		submit.CompileCmd = "mv Main.go Main && cd Main && go build Main.go 2> ../userStderr.txt"
 		submit.ExecuteCmd = "./Main/Main < testcase.txt > userStdout.txt 2> userStderr.txt"
 		submit.FileName = "Main.go"
