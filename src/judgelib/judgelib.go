@@ -168,6 +168,8 @@ func compile(submit *types.SubmitT, sessionIDchan *chan types.CmdResultJSON) (bo
 		submit.Result.CompileError = recv.ErrMessage[:65535]
 	}
 
+	time.Sleep(2 * time.Second)
+
 	return recv.Result, nil
 }
 
