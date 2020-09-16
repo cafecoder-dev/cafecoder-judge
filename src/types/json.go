@@ -10,15 +10,19 @@ type CmdResultJSON struct {
 	StdoutSize int64  `json:"stdoutSize"`
 	IsPLE      bool   `json:"isPLE"`
 
-	Status     string `json:"status"`
-	UserStderr string `json:"userStderr"`
+	Status   string `json:"status"`
+	Filename string `json:"filename"`
+
+	TestcaseResults TestcaseResultsGORM `json:"testcase_results"`
 }
 
 type RequestJSON struct {
-	SessionID string `json:"sessionID"`
-	Cmd       string `json:"cmd"`
-	Mode      string `json:"mode"` //Mode ... "judge" or "compile" or "download"
-	CodePath  string `json:"codePath"`
-	Filename  string `json:"filename"`
-	ProblemID string `json:"problemID"`
+	Mode      string       `json:"mode"` //Mode ... "judge" or "compile" or "download"
+	SessionID string       `json:"sessionID"`
+	Cmd       string       `json:"cmd"`
+	CodePath  string       `json:"codePath"`
+	Filename  string       `json:"filename"`
+	ProblemID string       `json:"problemID"`
+	Testcase  TestcaseGORM `json:"testcase"`
+	Problem   ProblemsGORM `json:"problem"`
 }
