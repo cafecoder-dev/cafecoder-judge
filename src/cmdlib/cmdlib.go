@@ -13,6 +13,11 @@ import (
 	"github.com/cafecoder-dev/cafecoder-judge/src/types"
 )
 
+type CmdRequest struct {
+	Mode string
+	Cmd  string
+}
+
 // ManageCmds ... コンテナからの応答を待つ。
 func ManageCmds(cmdChickets *types.CmdTicket) {
 	listen, err := net.Listen("tcp", "0.0.0.0:3344")
@@ -42,19 +47,18 @@ func ManageCmds(cmdChickets *types.CmdTicket) {
 	}
 }
 
-// RequestCmd ... 起動中のコンテナにコマンドの実行をリクエストする
-func RequestCmd(cmd string, mode string, submit types.SubmitT, sessionIDChan *chan types.CmdResultJSON) (types.CmdResultJSON, error) {
+func RequestCmd(cmdRequest CmdRequest, containerIPAddress string, sessionID string, sessionIDChan *chan types.CmdResultJSON) (types.CmdResultJSON, error) {
 	var (
 		request types.RequestJSON
 		recv    types.CmdResultJSON
 	)
 
-	containerConn, err := net.Dial("tcp", submit.ContainerInspect.NetworkSettings.IPAddress+":8887")
+	containerConn, err := net.Dial("tcp", containerIPAddress+":8887")
 	if err != nil {
 		return recv, err
 	}
 
-	request = types.RequestJSON{Cmd: cmd, SessionID: fmt.Sprintf("%d", submit.Info.ID), Mode: mode}
+	request = types.RequestJSON{Cmd: cmdRequest.Cmd, SessionID: sessionID, Mode: cmdRequest.Mode}
 	b, err := json.Marshal(request)
 	if err != nil {
 		return recv, err
@@ -66,18 +70,18 @@ func RequestCmd(cmd string, mode string, submit types.SubmitT, sessionIDChan *ch
 	}
 	containerConn.Close()
 
-	timeout := time.After(10 * time.Second)
+	timeout := time.After(20 * time.Second)
 	for {
 		select {
 		case <-timeout:
 			fmt.Println("Request timeout")
 			return types.CmdResultJSON{
-				SessionID: fmt.Sprintf("%d", submit.Info.ID),
+				SessionID: sessionID,
 				Time:      2200,
 				IsPLE:     true,
 			}, nil
 		case recv := <-*sessionIDChan:
-			if recv.SessionID == fmt.Sprintf("%d", submit.Info.ID) {
+			if recv.SessionID == sessionID {
 				return recv, nil
 			}
 		}

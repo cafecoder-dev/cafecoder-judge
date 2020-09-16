@@ -1,5 +1,7 @@
 package types
 
+import "github.com/cafecoder-dev/cafecoder-judge/src/types"
+
 type CmdResultJSON struct {
 	SessionID  string `json:"sessionID"`
 	Time       int    `json:"time"`
@@ -10,8 +12,10 @@ type CmdResultJSON struct {
 	StdoutSize int64  `json:"stdoutSize"`
 	IsPLE      bool   `json:"isPLE"`
 
-	Status string `json:"status"`
+	Status   string `json:"status"`
 	Filename string `json:"filename"`
+
+	Testcases types.TestcaseResultsGORM
 }
 
 type RequestJSON struct {

@@ -50,29 +50,7 @@ func Judge(args types.SubmitsGORM, cmdChickets *types.CmdTicket) {
 
 	submit.HashedID = util.MakeStringHash(id)
 
-	defer func() {
-		os.Remove(submit.CodePath)
-		os.Remove("./codes/" + submit.HashedID)
-	}()
-
-	if err := langconf.LangConfig(&submit); err != nil {
-		fmt.Printf("%s\n", err.Error())
-		submit.Result.Status = "IE"
-		sendResult(submit)
-		return
-	}
-
-	codePath, err := gcplib.DownloadSourceCode(ctx, submit)
-	if err != nil {
-		fmt.Printf("%s\n", err.Error())
-		submit.Result.Status = "IE"
-		sendResult(submit)
-		return
-	}
-
-	submit.CodePath = codePath
-
-	err = dkrlib.CreateContainer(ctx, &submit)
+	err := dkrlib.CreateContainer(ctx, &submit)
 	if err != nil {
 		fmt.Printf("%s\n", err.Error())
 		submit.Result.Status = "IE"
@@ -81,12 +59,28 @@ func Judge(args types.SubmitsGORM, cmdChickets *types.CmdTicket) {
 	}
 	defer dkrlib.RemoveContainer(ctx, submit)
 
-	if err := dkrlib.CopyToContainer(ctx, codePath, submit.FileName, 0777, submit); err != nil {
+	if err := langconf.LangConfig(&submit); err != nil {
 		fmt.Printf("%s\n", err.Error())
 		submit.Result.Status = "IE"
 		sendResult(submit)
 		return
 	}
+
+	res, err := cmdlib.RequestCmd(
+		cmdlib.CmdRequest{
+			Mode: "download",
+		},
+		submit.ContainerInspect.NetworkSettings.IPAddress,
+		id,
+		&sessionIDChan,
+	)
+	if err != nil || !res.Result {
+		fmt.Printf("%s\n", err.Error())
+		submit.Result.Status = "IE"
+		sendResult(submit)
+		return
+	}
+
 
 	if err = compile(&submit, &sessionIDChan); err != nil {
 		fmt.Printf("%s\n", err.Error())
