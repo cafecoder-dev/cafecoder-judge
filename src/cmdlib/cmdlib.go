@@ -49,12 +49,25 @@ func ManageCmds(cmdChickets *types.CmdTicket) {
 
 func RequestCmd(request types.RequestJSON, containerIPAddress string, sessionIDChan *chan types.CmdResultJSON) (types.CmdResultJSON, error) {
 	var (
-		recv    types.CmdResultJSON
+		recv          types.CmdResultJSON
+		containerConn net.Conn
+		err           error
 	)
 
-	containerConn, err := net.Dial("tcp", containerIPAddress+":8887")
-	if err != nil {
-		return recv, err
+	count := 0
+	for {
+		containerConn, err = net.Dial("tcp", containerIPAddress+":8887")
+		if err != nil {
+			time.Sleep(time.Second)
+			fmt.Println("Request again")
+			count++
+			if count > 5 {
+				return recv, err
+			}
+			continue
+		}
+
+		break
 	}
 
 	b, err := json.Marshal(request)

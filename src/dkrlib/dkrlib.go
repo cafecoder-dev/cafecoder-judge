@@ -36,6 +36,7 @@ func CreateContainer(ctx context.Context, submit *types.SubmitT) error {
 		Resources: container.Resources{
 			Memory:    2048000000, // メモリの制限: 2048 MB
 			PidsLimit: &pidsLimit,
+		
 		},
 	}
 

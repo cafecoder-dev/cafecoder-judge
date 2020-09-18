@@ -6,4 +6,4 @@ package util
 var JudgeNumberLimit = make(chan struct{}, MaxJudge)
 
 // MaxJudge ... 同時にジャッジできる最大の数
-const MaxJudge = 20
+const MaxJudge = 8
