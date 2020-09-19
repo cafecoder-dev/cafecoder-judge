@@ -224,6 +224,28 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 			return err
 		}
 
+		if recv.Timeout {
+			submit.Result.Status = "TLE"
+			db.
+				Table("submits").
+				Where("id = ? AND deleted_at IS NULL", submit.Info.ID).
+				Update("status", submit.Result.Status)
+			for _, elem := range testcases {
+				testcaseResults := types.TestcaseResultsGORM{
+					SubmitID:      submit.Info.ID,
+					TestcaseID:    elem.TestcaseID,
+					Status:        "TLE",
+					ExecutionTime: 2200,
+					CreatedAt:     util.TimeToString(time.Now()),
+					UpdatedAt:     util.TimeToString(time.Now()),
+				}
+				db.
+					Table("testcase_results").
+					Create(&testcaseResults)
+			}
+			break
+		}
+
 		if priorityMap[submit.Result.Status] < priorityMap[recv.TestcaseResults.Status] {
 			submit.Result.Status = recv.TestcaseResults.Status
 

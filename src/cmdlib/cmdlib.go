@@ -13,11 +13,6 @@ import (
 	"github.com/cafecoder-dev/cafecoder-judge/src/types"
 )
 
-type CmdRequest struct {
-	Mode string
-	Cmd  string
-}
-
 // ManageCmds ... コンテナからの応答を待つ。
 func ManageCmds(cmdChickets *types.CmdTicket) {
 	listen, err := net.Listen("tcp", "0.0.0.0:3344")
@@ -89,7 +84,7 @@ func RequestCmd(request types.RequestJSON, containerIPAddress string, sessionIDC
 			return types.CmdResultJSON{
 				SessionID: request.SessionID,
 				Time:      2200,
-				IsPLE:     true,
+				Timeout:   true,
 			}, nil
 		case recv := <-*sessionIDChan:
 			if recv.SessionID == request.SessionID {
