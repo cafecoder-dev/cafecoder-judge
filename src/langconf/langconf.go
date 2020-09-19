@@ -7,8 +7,6 @@ import (
 )
 
 func LangConfig(submit *types.SubmitT) error {
-	var err error
-
 	switch submit.Info.Lang {
 	case "c17_gcc10": //C17
 		submit.CompileCmd = "gcc-10 Main.c -O2 -lm -std=gnu17 -o Main.out 2> userStderr.txt"
@@ -39,7 +37,7 @@ func LangConfig(submit *types.SubmitT) error {
 		submit.ExecuteCmd = "mono Main.exe < testcase.txt > userStdout.txt 2> userStderr.txt"
 		submit.FileName = "Main.cs"
 	case "cs_dotnet31": // C#
-		submit.CompileCmd = "cd Main && dotnet new console && mv ./../Main.cs Program.cs && dotnet publish -c Release --nologo -v q -o . 2>> ../userStderr.txt && cd /"
+		submit.CompileCmd = "cd Main && dotnet new console && mv ./../Main.cs Program.cs && dotnet publish -c Release --nologo -v q -o . 2> ../userStderr.txt && cd /"
 		submit.ExecuteCmd = "dotnet ./Main/Main.dll < testcase.txt > userStdout.txt 2> userStderr.txt"
 		submit.FileName = "Main.cs"
 	case "go_115": //golang
@@ -55,8 +53,8 @@ func LangConfig(submit *types.SubmitT) error {
 		submit.ExecuteCmd = "./Main.out < testcase.txt > userStdout.txt 2> userStderr.txt"
 		submit.FileName = "Main.rs"
 	default:
-		err = errors.New("undefined language")
+		return errors.New("undefined language")
 	}
 
-	return err
+	return nil
 }
