@@ -56,7 +56,7 @@ func RequestCmd(request types.RequestJSON, containerIPAddress string, sessionIDC
 			time.Sleep(time.Second)
 			fmt.Println("Request again")
 			count++
-			if count > 5 {
+			if count > 10 {
 				return recv, err
 			}
 			continue
