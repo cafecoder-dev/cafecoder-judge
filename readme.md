@@ -1,12 +1,16 @@
 # cafecoder-judge
 cafecoder のジャッジシステム
 
-## Usage
-1. [https://github.com/cafecoder-dev/cafecoder-container-client] から clone して `README.md` に従ってください。
-2. `.env.sample` に従って `.env` ファイルを作成してください。
-3. `key.json` を作成を作成してください。(gcp 関係)
-4. 3344 ポートを開放してください。コンテナと tcp 通信をするためです。  
+## Requirements
++ Linux
++ Go (1.15)
++ Docker (19.03)
 
+## Usage
+1. [https://github.com/cafecoder-dev/cafecoder-container-client] を clone して Docker image を作成してください。
+2. `.env.sample` に従って `.env` ファイルを作成してください。
+3. `key.json` (gcp のキーファイル)を作成してください。
+4. 3344 ポートを開放してください。コンテナと tcp 通信をするためです。  
 5. 次のコマンドを実行してビルドしてください。
 ```console
 $ cd src/cmd/cafecoder-judge
