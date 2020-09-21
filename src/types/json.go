@@ -13,7 +13,6 @@ type CmdResultJSON struct {
 	Filename string `json:"filename"`
 
 	Timeout bool
-
 	TestcaseResults TestcaseResultsGORM `json:"testcase_results"`
 }
 
