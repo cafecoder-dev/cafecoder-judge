@@ -16,16 +16,12 @@ type SubmitT struct {
 	Info   SubmitsGORM
 	Result ResultGORM
 
-	Testcases          []TestcaseGORM
 	TestcaseResultsMap map[int64]TestcaseResultsGORM
 
 	HashedID     string
-	ExecDirPath  string
-	ExecFilePath string
 	FileName     string
 	CompileCmd   string
 	ExecuteCmd   string
-	CodePath         string
 	
 	ContainerCli     *client.Client
 	ContainerID      string

@@ -42,19 +42,29 @@ func ManageCmds(cmdChickets *types.CmdTicket) {
 	}
 }
 
-// RequestCmd ... 起動中のコンテナにコマンドの実行をリクエストする
-func RequestCmd(cmd string, mode string, submit types.SubmitT, sessionIDChan *chan types.CmdResultJSON) (types.CmdResultJSON, error) {
+func RequestCmd(request types.RequestJSON, containerIPAddress string, sessionIDChan *chan types.CmdResultJSON) (types.CmdResultJSON, error) {
 	var (
-		request types.RequestJSON
-		recv    types.CmdResultJSON
+		recv          types.CmdResultJSON
+		containerConn net.Conn
+		err           error
 	)
 
-	containerConn, err := net.Dial("tcp", submit.ContainerInspect.NetworkSettings.IPAddress+":8887")
-	if err != nil {
-		return recv, err
+	count := 0
+	for {
+		containerConn, err = net.Dial("tcp", containerIPAddress+":8887")
+		if err != nil {
+			time.Sleep(time.Second)
+			fmt.Println("Request again")
+			count++
+			if count > 10 {
+				return recv, err
+			}
+			continue
+		}
+
+		break
 	}
 
-	request = types.RequestJSON{Cmd: cmd, SessionID: fmt.Sprintf("%d", submit.Info.ID), Mode: mode}
 	b, err := json.Marshal(request)
 	if err != nil {
 		return recv, err
@@ -66,18 +76,18 @@ func RequestCmd(cmd string, mode string, submit types.SubmitT, sessionIDChan *ch
 	}
 	containerConn.Close()
 
-	timeout := time.After(10 * time.Second)
+	timeout := time.After(20 * time.Second)
 	for {
 		select {
 		case <-timeout:
 			fmt.Println("Request timeout")
 			return types.CmdResultJSON{
-				SessionID: fmt.Sprintf("%d", submit.Info.ID),
+				SessionID: request.SessionID,
 				Time:      2200,
-				IsPLE:     true,
+				Timeout:   true,
 			}, nil
 		case recv := <-*sessionIDChan:
-			if recv.SessionID == fmt.Sprintf("%d", submit.Info.ID) {
+			if recv.SessionID == request.SessionID {
 				return recv, nil
 			}
 		}

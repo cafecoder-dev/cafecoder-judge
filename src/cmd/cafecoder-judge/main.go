@@ -13,6 +13,10 @@ import (
 )
 
 func main() {
+	if err := util.SetJudgeNumberLimit(); err != nil {
+		log.Fatal(err)
+	}
+
 	cmdChickets := types.CmdTicket{Channel: make(map[string]chan types.CmdResultJSON)}
 	go cmdlib.ManageCmds(&cmdChickets)
 
