@@ -34,9 +34,9 @@ func main() {
 			Order("updated_at").
 			Find(&res)
 
-		for i := 0; i < len(res); i++ {
+		for _, elem := range res {
 			cmdChickets.Lock()
-			_, exist := cmdChickets.Channel[fmt.Sprintf("%d", res[i].ID)]
+			_, exist := cmdChickets.Channel[fmt.Sprintf("%d", elem.ID)]
 			cmdChickets.Unlock()
 
 			if exist {
@@ -45,13 +45,14 @@ func main() {
 				// wait until the number of judges becomes less than maxJudge
 				util.JudgeNumberLimit <- struct{}{}
 
+				fmt.Println(len(util.JudgeNumberLimit))
+
 				cmdChickets.Lock()
-				cmdChickets.Channel[fmt.Sprintf("%d", res[i].ID)] = make(chan types.CmdResultJSON)
+				cmdChickets.Channel[fmt.Sprintf("%d", elem.ID)] = make(chan types.CmdResultJSON)
 				cmdChickets.Unlock()
 
-				go judgelib.Judge(res[i], &cmdChickets)
+				go judgelib.Judge(elem, &cmdChickets)
 			}
 		}
 	}
 }
-
