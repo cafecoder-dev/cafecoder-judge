@@ -10,12 +10,12 @@ type CmdTicket struct {
 }
 
 type SubmitT struct {
-	Info   SubmitsGORM
-	Result ResultGORM
+	Info SubmitsGORM
 
-	TestcaseResultsMap map[int64]TestcaseResultsGORM
+	HashedID string
+}
 
-	HashedID   string
+type LanguageConfig struct {
 	FileName   string
 	CompileCmd string
 	ExecuteCmd string

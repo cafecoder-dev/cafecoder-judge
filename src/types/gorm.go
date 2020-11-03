@@ -6,11 +6,13 @@ type ProblemsGORM struct {
 }
 
 type ResultGORM struct {
-	Status          string `gorm:"column:status"`
-	ExecutionTime   int    `gorm:"column:execution_time"`
-	ExecutionMemory int    `gorm:"column:execution_memory"`
-	Point           int    `gorm:"column:point"` // int64 にしたほうがいいかもしれない(カラムにあわせて int にした)
-	CompileError    string `gorm:"column:compile_error"`
+	Status             string `gorm:"column:status"`
+	ExecutionTime      int    `gorm:"column:execution_time"`
+	ExecutionMemory    int    `gorm:"column:execution_memory"`
+	Point              int    `gorm:"column:point"` // int64 にしたほうがいいかもしれない(カラムにあわせて int にした)
+	CompileError       string `gorm:"column:compile_error"`
+	
+	TestcaseResultsMap map[int64]TestcaseResultsGORM
 }
 
 type TestcaseResultsGORM struct {

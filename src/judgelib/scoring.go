@@ -8,13 +8,13 @@ import (
 )
 
 // テストケースセットからスコアリング
-func scoring(submit types.SubmitT) int64 {
+func scoring(submits types.SubmitsGORM, result types.ResultGORM) int64 {
 	var (
 		testcaseSets         []types.TestcaseSetsGORM
 		testcaseTestcaseSets []types.TestcaseTestcaseSetsGORM
 	)
 
-	if submit.Result.Status == "IE" || submit.Result.Status == "CE" {
+	if result.Status == "IE" || result.Status == "CE" {
 		return 0
 	}
 
@@ -26,12 +26,12 @@ func scoring(submit types.SubmitT) int64 {
 
 	db.
 		Table("testcase_sets").
-		Where("problem_id=?", submit.Info.ProblemID).
+		Where("problem_id=?", submits.ProblemID).
 		Find(&testcaseSets)
 	db.
 		Table("testcase_testcase_sets").
 		Joins("INNER JOIN testcases ON testcase_testcase_sets.testcase_id = testcases.id").
-		Where("problem_id=? AND testcase_testcase_sets.deleted_at IS NULL AND testcases.deleted_at IS NULL", submit.Info.ProblemID).
+		Where("problem_id=? AND testcase_testcase_sets.deleted_at IS NULL AND testcases.deleted_at IS NULL", submits.ProblemID).
 		Find(&testcaseTestcaseSets)
 
 	// testcase_set_id -> testcase_id
@@ -50,7 +50,7 @@ func scoring(submit types.SubmitT) int64 {
 		isAC := true
 
 		for _, testcaseID := range testcaseSetMap[testcaseSet.ID] {
-			if submit.TestcaseResultsMap[testcaseID].Status != "AC" {
+			if result.TestcaseResultsMap[testcaseID].Status != "AC" {
 				isAC = false
 				break
 			}
