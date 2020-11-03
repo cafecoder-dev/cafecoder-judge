@@ -2,9 +2,6 @@ package types
 
 import (
 	"sync"
-
-	docker_types "github.com/docker/docker/api/types"
-	"github.com/docker/docker/client"
 )
 
 type CmdTicket struct {
@@ -18,12 +15,8 @@ type SubmitT struct {
 
 	TestcaseResultsMap map[int64]TestcaseResultsGORM
 
-	HashedID     string
-	FileName     string
-	CompileCmd   string
-	ExecuteCmd   string
-	
-	ContainerCli     *client.Client
-	ContainerID      string
-	ContainerInspect docker_types.ContainerJSON
+	HashedID   string
+	FileName   string
+	CompileCmd string
+	ExecuteCmd string
 }

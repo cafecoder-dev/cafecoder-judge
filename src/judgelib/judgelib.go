@@ -44,16 +44,16 @@ func Judge(args types.SubmitsGORM, cmdChickets *types.CmdTicket) {
 		(*cmdChickets).Unlock()
 	}()
 
-	submit.HashedID = util.MakeStringHash(id)
+	containerName := util.MakeStringHash(id)
 
-	err := dkrlib.CreateContainer(ctx, &submit)
+	container, err := dkrlib.CreateContainer(ctx, containerName)
 	if err != nil {
 		fmt.Printf("%s\n", err.Error())
 		submit.Result.Status = "IE"
 		sendResult(submit)
 		return
 	}
-	defer dkrlib.RemoveContainer(ctx, submit)
+	defer container.RemoveContainer(ctx)
 
 	if err := langconf.LangConfig(&submit); err != nil {
 		fmt.Printf("%s\n", err.Error())
@@ -69,7 +69,7 @@ func Judge(args types.SubmitsGORM, cmdChickets *types.CmdTicket) {
 			Filename:  submit.FileName,
 			CodePath:  submit.Info.Path,
 		},
-		submit.ContainerInspect.NetworkSettings.IPAddress,
+		container.IPAddress,
 		&sessionIDChan,
 	)
 	if err != nil || !recv.Result {
@@ -80,7 +80,7 @@ func Judge(args types.SubmitsGORM, cmdChickets *types.CmdTicket) {
 		return
 	}
 
-	compileRes, err := compile(&submit, &sessionIDChan)
+	compileRes, err := compile(&submit, container.IPAddress, &sessionIDChan)
 	if err != nil {
 		fmt.Printf("%s\n", err.Error())
 		submit.Result.Status = "IE"
@@ -93,7 +93,7 @@ func Judge(args types.SubmitsGORM, cmdChickets *types.CmdTicket) {
 		return
 	}
 
-	if err = tryTestcase(ctx, &submit, &sessionIDChan); err != nil {
+	if err = tryTestcase(ctx, &submit, container.IPAddress, &sessionIDChan); err != nil {
 		fmt.Printf("%s\n", err.Error())
 		submit.Result.Status = "IE"
 		sendResult(submit)
@@ -145,7 +145,7 @@ func sendResult(submit types.SubmitT) {
 	<-util.JudgeNumberLimit
 }
 
-func compile(submit *types.SubmitT, sessionIDchan *chan types.CmdResultJSON) (bool, error) {
+func compile(submit *types.SubmitT, containerIPAddress string, sessionIDchan *chan types.CmdResultJSON) (bool, error) {
 	recv, err := cmdlib.RequestCmd(
 		types.RequestJSON{
 			Mode:      "compile",
@@ -153,7 +153,7 @@ func compile(submit *types.SubmitT, sessionIDchan *chan types.CmdResultJSON) (bo
 			SessionID: fmt.Sprintf("%d", submit.Info.ID),
 			Filename:  submit.FileName,
 		},
-		submit.ContainerInspect.NetworkSettings.IPAddress,
+		containerIPAddress,
 		sessionIDchan,
 	)
 	if err != nil {
@@ -173,7 +173,7 @@ func compile(submit *types.SubmitT, sessionIDchan *chan types.CmdResultJSON) (bo
 	return recv.Result, nil
 }
 
-func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan types.CmdResultJSON) error {
+func tryTestcase(ctx context.Context, submit *types.SubmitT, containerIPAddress string, sessionIDChan *chan types.CmdResultJSON) error {
 	var (
 		testcases []types.TestcaseGORM
 		problem   types.ProblemsGORM
@@ -217,7 +217,7 @@ func tryTestcase(ctx context.Context, submit *types.SubmitT, sessionIDChan *chan
 				Testcase:  elem,
 				Problem:   problem,
 			},
-			submit.ContainerInspect.NetworkSettings.IPAddress,
+			containerIPAddress,
 			sessionIDChan,
 		)
 		if err != nil {
