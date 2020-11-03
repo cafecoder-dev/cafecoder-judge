@@ -5,7 +5,7 @@ go 1.15
 require (
 	github.com/Microsoft/go-winio v0.4.15-0.20190919025122-fc70bd9a86b5 // indirect
 	github.com/containerd/containerd v1.4.1 // indirect
-	github.com/denisenkom/go-mssqldb v0.0.0-20201103031642-2f2a555cc2e1 // indirect
+	github.com/denisenkom/go-mssqldb v0.0.0-20201103052722-628e054fa9c3 // indirect
 	github.com/docker/distribution v2.7.1+incompatible // indirect
 	github.com/docker/docker v17.12.0-ce-rc1.0.20200807175356-c997a4995d69+incompatible
 	github.com/docker/go-connections v0.4.0 // indirect
