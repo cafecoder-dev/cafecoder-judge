@@ -3,6 +3,7 @@ package cmdlib
 import (
 	"encoding/base64"
 	"encoding/json"
+	"sync"
 
 	// "errors"
 	"fmt"
@@ -13,8 +14,13 @@ import (
 	"github.com/cafecoder-dev/cafecoder-judge/src/types"
 )
 
+type CmdTicket struct {
+	sync.Mutex
+	Channel map[string]chan types.CmdResultJSON
+}
+
 // ManageCmds ... コンテナからの応答を待つ。
-func ManageCmds(cmdChickets *types.CmdTicket) {
+func ManageCmds(cmdChickets *CmdTicket) {
 	listen, err := net.Listen("tcp", "0.0.0.0:3344")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%s\n", err)

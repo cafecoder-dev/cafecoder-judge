@@ -2,12 +2,16 @@ package langconf
 
 import (
 	"errors"
-
-	"github.com/cafecoder-dev/cafecoder-judge/src/types"
 )
 
-func LangConfig(lang string) (types.LanguageConfig, error) {
-	langConfig := types.LanguageConfig{}
+type LanguageConfig struct {
+	FileName   string
+	CompileCmd string
+	ExecuteCmd string
+}
+
+func LangConfig(lang string) (LanguageConfig, error) {
+	langConfig := LanguageConfig{}
 
 	switch lang {
 	case "c17_gcc10": //C17

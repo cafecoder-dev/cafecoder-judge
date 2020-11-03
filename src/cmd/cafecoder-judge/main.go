@@ -17,7 +17,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	cmdChickets := types.CmdTicket{Channel: make(map[string]chan types.CmdResultJSON)}
+	cmdChickets := cmdlib.CmdTicket{Channel: make(map[string]chan types.CmdResultJSON)}
 	go cmdlib.ManageCmds(&cmdChickets)
 
 	db, err := sqllib.NewDB()

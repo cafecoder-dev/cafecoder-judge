@@ -21,8 +21,7 @@ import (
 var priorityMap = map[string]int{"-": 0, "AC": 2, "TLE": 3, "MLE": 4, "OLE": 5, "WA": 6, "RE": 7, "CE": 8, "IE": 9}
 
 // Judge ... ジャッジのフロー
-func Judge(submits types.SubmitsGORM, cmdChickets *types.CmdTicket) {
-	var submit = types.SubmitT{}
+func Judge(submits types.SubmitsGORM, cmdChickets *cmdlib.CmdTicket) {
 	result := types.ResultGORM{Status: "-", TestcaseResultsMap: make(map[int64]types.TestcaseResultsGORM)}
 
 	ctx := context.Background()
@@ -33,9 +32,7 @@ func Judge(submits types.SubmitsGORM, cmdChickets *types.CmdTicket) {
 		return
 	}
 
-	submit.Info = submits
-
-	id := fmt.Sprintf("%d", submit.Info.ID) // submit.info.ID を文字列に変換
+	id := fmt.Sprintf("%d", submits.ID) // submit.info.ID を文字列に変換
 	(*cmdChickets).Lock()
 	sessionIDChan := (*cmdChickets).Channel[id]
 	(*cmdChickets).Unlock()
@@ -67,9 +64,9 @@ func Judge(submits types.SubmitsGORM, cmdChickets *types.CmdTicket) {
 	recv, err := cmdlib.RequestCmd(
 		types.RequestJSON{
 			Mode:      "download",
-			SessionID: fmt.Sprintf("%d", submit.Info.ID),
+			SessionID: fmt.Sprintf("%d", submits.ID),
 			Filename:  langConfig.FileName,
-			CodePath:  submit.Info.Path,
+			CodePath:  submits.Path,
 		},
 		container.IPAddress,
 		&sessionIDChan,
@@ -145,7 +142,7 @@ func sendResult(submits types.SubmitsGORM, result types.ResultGORM) {
 	<-util.JudgeNumberLimit
 }
 
-func compile(submitID string, containerIPAddress string, langConfig types.LanguageConfig, sessionIDchan *chan types.CmdResultJSON) (types.CmdResultJSON, error) {
+func compile(submitID string, containerIPAddress string, langConfig langconf.LanguageConfig, sessionIDchan *chan types.CmdResultJSON) (types.CmdResultJSON, error) {
 	recv, err := cmdlib.RequestCmd(
 		types.RequestJSON{
 			Mode:      "compile",
@@ -167,7 +164,7 @@ func compile(submitID string, containerIPAddress string, langConfig types.Langua
 	return recv, nil
 }
 
-func tryTestcase(ctx context.Context, submits types.SubmitsGORM, langConfig types.LanguageConfig, containerIPAddress string, sessionIDChan *chan types.CmdResultJSON) error {
+func tryTestcase(ctx context.Context, submits types.SubmitsGORM, langConfig langconf.LanguageConfig, containerIPAddress string, sessionIDChan *chan types.CmdResultJSON) error {
 	var (
 		testcases []types.TestcaseGORM
 		problem   types.ProblemsGORM
