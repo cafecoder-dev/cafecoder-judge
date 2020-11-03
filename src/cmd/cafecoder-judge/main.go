@@ -45,8 +45,6 @@ func main() {
 				// wait until the number of judges becomes less than maxJudge
 				util.JudgeNumberLimit <- struct{}{}
 
-				fmt.Println(len(util.JudgeNumberLimit))
-
 				cmdChickets.Lock()
 				cmdChickets.Channel[fmt.Sprintf("%d", elem.ID)] = make(chan types.CmdResultJSON)
 				cmdChickets.Unlock()
