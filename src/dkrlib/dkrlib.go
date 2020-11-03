@@ -9,7 +9,7 @@ import (
 	"io/ioutil"
 	"os"
 
-	docker_types "github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/client"
@@ -48,7 +48,7 @@ func CreateContainer(ctx context.Context, containerName string) (*Container, err
 		return nil, err
 	}
 
-	err = cli.ContainerStart(ctx, resp.ID, docker_types.ContainerStartOptions{})
+	err = cli.ContainerStart(ctx, resp.ID, types.ContainerStartOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -72,7 +72,7 @@ func (container *Container) RemoveContainer(ctx context.Context) {
 	_ = container.Client.ContainerRemove(
 		ctx,
 		container.ID,
-		docker_types.ContainerRemoveOptions{RemoveVolumes: true, RemoveLinks: true, Force: true},
+		types.ContainerRemoveOptions{RemoveVolumes: true, RemoveLinks: true, Force: true},
 	)
 
 	labelFilters := filters.NewArgs()
@@ -139,7 +139,7 @@ func (container *Container) CopyToContainer(ctx context.Context, hostFilePath st
 		container.ID,
 		"/",
 		&buf,
-		docker_types.CopyToContainerOptions{},
+		types.CopyToContainerOptions{},
 	)
 	if err != nil {
 		return err
