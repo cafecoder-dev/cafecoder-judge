@@ -9,9 +9,7 @@ import (
 	"io/ioutil"
 	"os"
 
-	"github.com/cafecoder-dev/cafecoder-judge/src/types"
-
-	docker_types "github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/client"
@@ -19,67 +17,74 @@ import (
 
 const apiVersion = "1.40"
 
-// CreateContainer ... コンテナを作成する
-func CreateContainer(ctx context.Context, submit *types.SubmitT) error {
+type Container struct {
+	Client    *client.Client
+	Name      string
+	ID        string
+	IPAddress string
+}
+
+// CreateContainer ... create new container and return container information
+func CreateContainer(ctx context.Context, containerName string) (*Container, error) {
 	var err error
 	pidsLimit := int64(1024)
 
-	submit.ContainerCli, err = client.NewClientWithOpts(client.WithVersion(apiVersion))
-
+	cli, err := client.NewClientWithOpts(client.WithVersion(apiVersion))
 	if err != nil {
-		return err
+		return nil, err
 	}
-	defer submit.ContainerCli.Close()
+	defer cli.Close()
 
 	config := &container.Config{Image: "cafecoder"}
 	hostConfig := &container.HostConfig{
 		Resources: container.Resources{
 			Memory:    2048000000, // メモリの制限: 2048 MB
 			PidsLimit: &pidsLimit,
-		
 		},
 	}
 
-	resp, err := submit.ContainerCli.ContainerCreate(ctx, config, hostConfig, nil, nil, submit.HashedID)
+	resp, err := cli.ContainerCreate(ctx, config, hostConfig, nil, nil, containerName)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	submit.ContainerID = resp.ID
-	err = submit.ContainerCli.ContainerStart(ctx, submit.ContainerID, docker_types.ContainerStartOptions{})
+	err = cli.ContainerStart(ctx, resp.ID, types.ContainerStartOptions{})
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	submit.ContainerInspect, err = submit.ContainerCli.ContainerInspect(ctx, submit.ContainerID)
+	containerInspect, err := cli.ContainerInspect(ctx, resp.ID)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return nil
+
+	return &Container{
+		Client:    cli,
+		Name:      containerName,
+		ID:        resp.ID,
+		IPAddress: containerInspect.NetworkSettings.IPAddress,
+	}, nil
 }
 
 // RemoveContainer ... コンテナを破棄する
-func RemoveContainer(ctx context.Context, submit types.SubmitT) {
-	submit.ContainerCli.ContainerStop(ctx, submit.ContainerID, nil)
-	submit.ContainerCli.ContainerRemove(
+func (container *Container) RemoveContainer(ctx context.Context) {
+	_ = container.Client.ContainerStop(ctx, container.ID, nil)
+	_ = container.Client.ContainerRemove(
 		ctx,
-		submit.ContainerID,
-		docker_types.ContainerRemoveOptions{RemoveVolumes: true, RemoveLinks: true, Force: true},
+		container.ID,
+		types.ContainerRemoveOptions{RemoveVolumes: true, RemoveLinks: true, Force: true},
 	)
 
 	labelFilters := filters.NewArgs()
-
-	_, _ = submit.ContainerCli.ContainersPrune(ctx, labelFilters)
-
-	// fmt.Println("container: " + submit.ContainerID + " removed")
+	_, _ = container.Client.ContainersPrune(ctx, labelFilters)
 }
 
 // CopyFromContainer ... コンテナからコピーしてくる
-func CopyFromContainer(ctx context.Context, filepath string, submit types.SubmitT) (*bytes.Buffer, error) {
+func (container *Container) CopyFromContainer(ctx context.Context, filepath string) (*bytes.Buffer, error) {
 	var buffer *bytes.Buffer
-	reader, _, err := submit.ContainerCli.CopyFromContainer(
+	reader, _, err := container.Client.CopyFromContainer(
 		ctx,
-		submit.ContainerID,
+		container.ID,
 		filepath,
 	)
 	if err != nil {
@@ -97,7 +102,7 @@ func CopyFromContainer(ctx context.Context, filepath string, submit types.Submit
 }
 
 // CopyToContainer ... コンテナにコピーする
-func CopyToContainer(ctx context.Context, hostFilePath string, containerFilePath string, mode int64, submit types.SubmitT) error {
+func (container *Container) CopyToContainer(ctx context.Context, hostFilePath string, containerFilePath string, mode int64) error {
 	var buf bytes.Buffer
 
 	usercodeFile, err := os.Open(hostFilePath)
@@ -112,6 +117,8 @@ func CopyToContainer(ctx context.Context, hostFilePath string, containerFilePath
 	}
 
 	tw := tar.NewWriter(&buf)
+	defer tw.Close()
+
 	err = tw.WriteHeader(
 		&tar.Header{
 			Name: containerFilePath,
@@ -119,15 +126,20 @@ func CopyToContainer(ctx context.Context, hostFilePath string, containerFilePath
 			Size: int64(len(content)),
 		},
 	)
-	tw.Write(content)
-	tw.Close()
+	if err != nil {
+		return err
+	}
 
-	err = submit.ContainerCli.CopyToContainer(
+	if _, err := tw.Write(content); err != nil {
+		return err
+	}
+
+	err = container.Client.CopyToContainer(
 		ctx,
-		submit.ContainerID,
+		container.ID,
 		"/",
 		&buf,
-		docker_types.CopyToContainerOptions{},
+		types.CopyToContainerOptions{},
 	)
 	if err != nil {
 		return err

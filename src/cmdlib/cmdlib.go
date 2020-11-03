@@ -3,6 +3,7 @@ package cmdlib
 import (
 	"encoding/base64"
 	"encoding/json"
+	"sync"
 
 	// "errors"
 	"fmt"
@@ -13,8 +14,13 @@ import (
 	"github.com/cafecoder-dev/cafecoder-judge/src/types"
 )
 
+type CmdTicket struct {
+	sync.Mutex
+	Channel map[string]chan types.CmdResultJSON
+}
+
 // ManageCmds ... コンテナからの応答を待つ。
-func ManageCmds(cmdChickets *types.CmdTicket) {
+func ManageCmds(cmdChickets *CmdTicket) {
 	listen, err := net.Listen("tcp", "0.0.0.0:3344")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%s\n", err)
@@ -49,6 +55,7 @@ func RequestCmd(request types.RequestJSON, containerIPAddress string, sessionIDC
 		err           error
 	)
 
+	// コンテナへのリクエストが失敗したら再リクエストする。
 	count := 0
 	for {
 		containerConn, err = net.Dial("tcp", containerIPAddress+":8887")
@@ -80,7 +87,7 @@ func RequestCmd(request types.RequestJSON, containerIPAddress string, sessionIDC
 	for {
 		select {
 		case <-timeout:
-			fmt.Println("Request timeout")
+			fmt.Println("Request timed out")
 			return types.CmdResultJSON{
 				SessionID: request.SessionID,
 				Time:      2200,

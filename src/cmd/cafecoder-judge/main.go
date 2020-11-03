@@ -17,7 +17,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	cmdChickets := types.CmdTicket{Channel: make(map[string]chan types.CmdResultJSON)}
+	cmdChickets := cmdlib.CmdTicket{Channel: make(map[string]chan types.CmdResultJSON)}
 	go cmdlib.ManageCmds(&cmdChickets)
 
 	db, err := sqllib.NewDB()
@@ -34,9 +34,9 @@ func main() {
 			Order("updated_at").
 			Find(&res)
 
-		for i := 0; i < len(res); i++ {
+		for _, elem := range res {
 			cmdChickets.Lock()
-			_, exist := cmdChickets.Channel[fmt.Sprintf("%d", res[i].ID)]
+			_, exist := cmdChickets.Channel[fmt.Sprintf("%d", elem.ID)]
 			cmdChickets.Unlock()
 
 			if exist {
@@ -46,12 +46,11 @@ func main() {
 				util.JudgeNumberLimit <- struct{}{}
 
 				cmdChickets.Lock()
-				cmdChickets.Channel[fmt.Sprintf("%d", res[i].ID)] = make(chan types.CmdResultJSON)
+				cmdChickets.Channel[fmt.Sprintf("%d", elem.ID)] = make(chan types.CmdResultJSON)
 				cmdChickets.Unlock()
 
-				go judgelib.Judge(res[i], &cmdChickets)
+				go judgelib.Judge(elem, &cmdChickets)
 			}
 		}
 	}
 }
-
