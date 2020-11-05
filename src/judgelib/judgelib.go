@@ -88,6 +88,7 @@ func Judge(submits types.SubmitsGORM, cmdChickets *cmdlib.CmdTicket) {
 	}
 	if !compileRes.Result {
 		result.Status = "CE"
+		result.CompileError = compileRes.ErrMessage
 		sendResult(submits, result)
 		return
 	}
@@ -137,7 +138,8 @@ func sendResult(submits types.SubmitsGORM, result types.ResultGORM) {
 			Table("submits").
 			Where("id=? AND deleted_at IS NULL", submits.ID).
 			Update("execution_memory", gorm.Expr("NULL")).
-			Update("execution_time", gorm.Expr("NULL"))
+			Update("execution_time", gorm.Expr("NULL")).
+			Update("compile_error", result.CompileError)
 	}
 
 	<-util.JudgeNumberLimit
