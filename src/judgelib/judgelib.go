@@ -22,7 +22,7 @@ var priorityMap = map[string]int{"-": 0, "AC": 2, "TLE": 3, "MLE": 4, "OLE": 5, 
 
 // Judge ... ジャッジのフロー
 func Judge(submits types.SubmitsGORM, cmdChickets *cmdlib.CmdTicket) {
-	result := types.ResultGORM{Status: "-", TestcaseResultsMap: make(map[int64]types.TestcaseResultsGORM)}
+	result := types.ResultGORM{Status: "-"}
 
 	ctx := context.Background()
 
@@ -92,7 +92,8 @@ func Judge(submits types.SubmitsGORM, cmdChickets *cmdlib.CmdTicket) {
 		return
 	}
 
-	if err = tryTestcase(ctx, submits, langConfig, container.IPAddress, &sessionIDChan); err != nil {
+	result, err = tryTestcase(ctx, submits, langConfig, container.IPAddress, &sessionIDChan)
+	if err != nil {
 		fmt.Printf("%s\n", err.Error())
 		result.Status = "IE"
 		sendResult(submits, result)
@@ -164,7 +165,7 @@ func compile(submitID string, containerIPAddress string, langConfig langconf.Lan
 	return recv, nil
 }
 
-func tryTestcase(ctx context.Context, submits types.SubmitsGORM, langConfig langconf.LanguageConfig, containerIPAddress string, sessionIDChan *chan types.CmdResultJSON) error {
+func tryTestcase(ctx context.Context, submits types.SubmitsGORM, langConfig langconf.LanguageConfig, containerIPAddress string, sessionIDChan *chan types.CmdResultJSON) (types.ResultGORM, error) {
 	var (
 		testcases []types.TestcaseGORM
 		problem   types.ProblemsGORM
@@ -173,7 +174,7 @@ func tryTestcase(ctx context.Context, submits types.SubmitsGORM, langConfig lang
 
 	db, err := sqllib.NewDB()
 	if err != nil {
-		return err
+		return types.ResultGORM{}, err
 	}
 	defer db.Close()
 
@@ -188,7 +189,7 @@ func tryTestcase(ctx context.Context, submits types.SubmitsGORM, langConfig lang
 		Find(&testcases)
 
 	if len(testcases) == 0 {
-		return errors.New("testcases not found")
+		return types.ResultGORM{}, errors.New("testcases not found")
 	}
 
 	if submits.Status == "WR" {
@@ -215,7 +216,7 @@ func tryTestcase(ctx context.Context, submits types.SubmitsGORM, langConfig lang
 			sessionIDChan,
 		)
 		if err != nil {
-			return err
+			return types.ResultGORM{}, err
 		}
 
 		if recv.Timeout {
@@ -261,5 +262,5 @@ func tryTestcase(ctx context.Context, submits types.SubmitsGORM, langConfig lang
 		result.TestcaseResultsMap[recv.TestcaseResults.TestcaseID] = recv.TestcaseResults
 	}
 
-	return nil
+	return result, nil
 }
