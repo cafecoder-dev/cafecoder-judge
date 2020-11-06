@@ -22,6 +22,8 @@ var priorityMap = map[string]int{"-": 0, "AC": 2, "TLE": 3, "MLE": 4, "OLE": 5, 
 
 // Judge ... ジャッジのフロー
 func Judge(submits types.SubmitsGORM, cmdChickets *cmdlib.CmdTicket) {
+	defer func() { <-util.JudgeNumberLimit }()
+
 	result := types.ResultGORM{Status: "-"}
 
 	ctx := context.Background()
@@ -36,6 +38,7 @@ func Judge(submits types.SubmitsGORM, cmdChickets *cmdlib.CmdTicket) {
 	(*cmdChickets).Lock()
 	sessionIDChan := (*cmdChickets).Channel[id]
 	(*cmdChickets).Unlock()
+
 	defer func() {
 		(*cmdChickets).Lock()
 		delete((*cmdChickets).Channel, id)
@@ -141,8 +144,6 @@ func sendResult(submits types.SubmitsGORM, result types.ResultGORM) {
 			Update("execution_time", gorm.Expr("NULL")).
 			Update("compile_error", result.CompileError)
 	}
-
-	<-util.JudgeNumberLimit
 }
 
 func compile(submitID string, containerIPAddress string, langConfig langconf.LanguageConfig, sessionIDchan *chan types.CmdResultJSON) (types.CmdResultJSON, error) {
