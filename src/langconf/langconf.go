@@ -75,10 +75,18 @@ func LangConfig(lang string) (LanguageConfig, error) {
 		langConfig.CompileCmd = "perl -c Main.pl 2> userStderr.txt"
 		langConfig.ExecuteCmd = "perl Main.pl < testcase.txt > userStdout.txt 2> userStderr.txt"
 		langConfig.FileName = "Main.pl"
-	case "Raku_202010":
-		langConfig.CompileCmd = "source ~/.profile && perl6 -c ./Main.p6 2> userStderr.txt"
-		langConfig.ExecuteCmd = "source ~/.profile && perl6 ./Main.p6 < testcase.txt > userStdout.txt 2> userStderr.txt"
-		langConfig.FileName = "Main.p6"
+	case "crystal_0_35_1":
+		langConfig.CompileCmd = "crystal build Main.cr 2> userStderr.txt"
+		langConfig.ExecuteCmd = "./Main.cr < testcase.txt > userStdout.txt 2> userStderr.txt"
+		langConfig.FileName = "Main.cr"
+	case "cat_8_30":
+		langConfig.CompileCmd = ":"
+		langConfig.ExecuteCmd = "cat Main.txt > userStdout.txt 2> userStderr.txt"
+		langConfig.FileName = "Main.txt"
+	case "bash_5_0_17":
+		langConfig.CompileCmd = "bash -n Main.sh 2> userStderr.txt"
+		langConfig.ExecuteCmd = "./Main.sh < testcase.txt > userStdout.txt 2> userStderr.txt"
+		langConfig.FileName = "Main.sh"
 
 	default:
 		return langConfig, errors.New("undefined language")
