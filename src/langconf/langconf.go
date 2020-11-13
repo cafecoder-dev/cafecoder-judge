@@ -83,6 +83,10 @@ func LangConfig(lang string) (LanguageConfig, error) {
 		langConfig.CompileCmd = ":"
 		langConfig.ExecuteCmd = "cat Main.txt"
 		langConfig.FileName = "Main.txt"
+	case "bash_5_0_17":
+		langConfig.CompileCmd = ":"
+		langConfig.ExecuteCmd = "./Main.sh"
+		langConfig.FileName = "Main.sh"
 	
 
 	default:
