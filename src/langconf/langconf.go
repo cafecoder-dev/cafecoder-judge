@@ -71,7 +71,7 @@ func LangConfig(lang string) (LanguageConfig, error) {
 		langConfig.CompileCmd = "gfortran -O2 Main.f90 -o Main.out 2> userStderr.txt"
 		langConfig.ExecuteCmd = "./Main.out < testcase.txt > userStdout.txt 2> userStderr.txt"
 		langConfig.FileName = "Main.f90"
-	case "Perl_5_30_0":
+	case "Perl_5_30":
 		langConfig.CompileCmd = "perl -c Main.pl 2> userStderr.txt"
 		langConfig.ExecuteCmd = "perl Main.pl < testcase.txt > userStdout.txt 2> userStderr.txt"
 		langConfig.FileName = "Main.pl"
@@ -87,7 +87,6 @@ func LangConfig(lang string) (LanguageConfig, error) {
 		langConfig.CompileCmd = "bash -n Main.sh 2> userStderr.txt"
 		langConfig.ExecuteCmd = "./Main.sh < testcase.txt > userStdout.txt 2> userStderr.txt"
 		langConfig.FileName = "Main.sh"
-	
 
 	default:
 		return langConfig, errors.New("undefined language")
