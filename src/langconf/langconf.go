@@ -79,6 +79,11 @@ func LangConfig(lang string) (LanguageConfig, error) {
 		langConfig.CompileCmd = "crystal build Main.cr"
 		langConfig.ExecuteCmd = "./Main.cr"
 		langConfig.FileName = "Main.cr"
+	case "cat_8_30":
+		langConfig.CompileCmd = ":"
+		langConfig.ExecuteCmd = "cat Main.txt"
+		langConfig.FileName = "Main.txt"
+	
 
 	default:
 		return langConfig, errors.New("undefined language")
