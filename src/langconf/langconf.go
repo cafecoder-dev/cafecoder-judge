@@ -10,6 +10,7 @@ type LanguageConfig struct {
 	ExecuteCmd string
 }
 
+// todo json 化
 func LangConfig(lang string) (LanguageConfig, error) {
 	langConfig := LanguageConfig{}
 
@@ -50,14 +51,28 @@ func LangConfig(lang string) (LanguageConfig, error) {
 		langConfig.CompileCmd = "mv Main.go Main && cd Main && go build Main.go 2> ../userStderr.txt"
 		langConfig.ExecuteCmd = "./Main/Main < testcase.txt > userStdout.txt 2> userStderr.txt"
 		langConfig.FileName = "Main.go"
-	case "nim":
+	case "nim_14":
 		langConfig.CompileCmd = "nim cpp -d:release --opt:speed --multimethods:on -o:Main.out Main.nim 2> userStderr.txt"
 		langConfig.ExecuteCmd = "./Main.out < testcase.txt > userStdout.txt 2> userStderr.txt"
 		langConfig.FileName = "Main.nim"
-	case "rust_115":
+	case "rust_147":
 		langConfig.CompileCmd = "rustc -O -o Main.out Main.rs 2> userStderr.txt"
 		langConfig.ExecuteCmd = "./Main.out < testcase.txt > userStdout.txt 2> userStderr.txt"
 		langConfig.FileName = "Main.rs"
+	case "ruby_27":
+		langConfig.CompileCmd = "ruby -w -c ./Main.rb 2> userStderr.txt"
+		langConfig.ExecuteCmd = "ruby ./Main.rb < testcase.txt > userStdout.txt 2> userStderr.txt"
+		langConfig.FileName = "Main.rb"
+	case "kotlin_14":
+		langConfig.CompileCmd = "kotlinc ./Main.kt -include-runtime -d Main.jar 2> userStderr.txt"
+		langConfig.ExecuteCmd = "kotlin Main.jar < testcase.txt > userStdout.txt 2> userStderr.txt"
+		langConfig.FileName = "Main.kt"
+	case "fortlan_10":
+		langConfig.CompileCmd = "gfortran -O2 Main.f90 -o Main.out 2> userStderr.txt"
+		langConfig.ExecuteCmd = "./Main.out < testcase.txt > userStdout.txt 2> userStderr.txt"
+		langConfig.FileName = "Main.f90"
+	
+
 	default:
 		return langConfig, errors.New("undefined language")
 	}
