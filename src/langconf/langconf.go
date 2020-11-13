@@ -75,6 +75,10 @@ func LangConfig(lang string) (LanguageConfig, error) {
 		langConfig.CompileCmd = "perl -c Main.pl"
 		langConfig.ExecuteCmd = "perl Main.pl"
 		langConfig.FileName = "Main.pl"
+	case "crystal_0_35_1":
+		langConfig.CompileCmd = "crystal build Main.cr"
+		langConfig.ExecuteCmd = "./Main.cr"
+		langConfig.FileName = "Main.cr"
 
 	default:
 		return langConfig, errors.New("undefined language")
