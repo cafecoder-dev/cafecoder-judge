@@ -72,20 +72,20 @@ func LangConfig(lang string) (LanguageConfig, error) {
 		langConfig.ExecuteCmd = "./Main.out < testcase.txt > userStdout.txt 2> userStderr.txt"
 		langConfig.FileName = "Main.f90"
 	case "Perl_5_30_0":
-		langConfig.CompileCmd = "perl -c Main.pl"
-		langConfig.ExecuteCmd = "perl Main.pl"
+		langConfig.CompileCmd = "perl -c Main.pl 2> userStderr.txt"
+		langConfig.ExecuteCmd = "perl Main.pl < testcase.txt > userStdout.txt 2> userStderr.txt"
 		langConfig.FileName = "Main.pl"
 	case "crystal_0_35_1":
-		langConfig.CompileCmd = "crystal build Main.cr"
-		langConfig.ExecuteCmd = "./Main.cr"
+		langConfig.CompileCmd = "crystal build Main.cr 2> userStderr.txt"
+		langConfig.ExecuteCmd = "./Main.cr < testcase.txt > userStdout.txt 2> userStderr.txt"
 		langConfig.FileName = "Main.cr"
 	case "cat_8_30":
 		langConfig.CompileCmd = ":"
-		langConfig.ExecuteCmd = "cat Main.txt"
+		langConfig.ExecuteCmd = "cat Main.txt > userStdout.txt 2> userStderr.txt"
 		langConfig.FileName = "Main.txt"
 	case "bash_5_0_17":
-		langConfig.CompileCmd = ":"
-		langConfig.ExecuteCmd = "./Main.sh"
+		langConfig.CompileCmd = "bash -n Main.sh 2> userStderr.txt"
+		langConfig.ExecuteCmd = "./Main.sh < testcase.txt > userStdout.txt 2> userStderr.txt"
 		langConfig.FileName = "Main.sh"
 	
 
