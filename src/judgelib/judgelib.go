@@ -213,7 +213,13 @@ func tryTestcase(ctx context.Context, submits types.SubmitsGORM, langConfig lang
 			Filename:  langConfig.FileName,
 			Testcase:  elem,
 			Problem:   problem,
-			TimeLimit: 6000,
+			TimeLimit: func() int {
+				if submits.Lang == "python38" {
+					return 6000
+				} else {
+					return 2000
+				}
+			}(),
 		}
 		recv, err := cmdlib.RequestCmd(
 			req,
