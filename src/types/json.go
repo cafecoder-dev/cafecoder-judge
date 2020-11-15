@@ -12,7 +12,7 @@ type CmdResultJSON struct {
 	Status   string `json:"status"`
 	Filename string `json:"filename"`
 
-	Timeout bool
+	Timeout         bool
 	TestcaseResults TestcaseResultsGORM `json:"testcase_results"`
 }
 
@@ -23,6 +23,7 @@ type RequestJSON struct {
 	CodePath  string       `json:"codePath"`
 	Filename  string       `json:"filename"`
 	ProblemID string       `json:"problemID"`
+	TimeLimit int          `json:"timeLimit"`
 	Testcase  TestcaseGORM `json:"testcase"`
 	Problem   ProblemsGORM `json:"problem"`
 }

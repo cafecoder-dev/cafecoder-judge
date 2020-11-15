@@ -22,6 +22,8 @@ var priorityMap = map[string]int{"-": 0, "AC": 2, "TLE": 3, "MLE": 4, "OLE": 5, 
 
 // Judge ... ジャッジのフロー
 func Judge(submits types.SubmitsGORM, cmdChickets *cmdlib.CmdTicket) {
+	defer func() { <-util.JudgeNumberLimit }()
+
 	result := types.ResultGORM{Status: "-"}
 
 	ctx := context.Background()
@@ -36,6 +38,7 @@ func Judge(submits types.SubmitsGORM, cmdChickets *cmdlib.CmdTicket) {
 	(*cmdChickets).Lock()
 	sessionIDChan := (*cmdChickets).Channel[id]
 	(*cmdChickets).Unlock()
+
 	defer func() {
 		(*cmdChickets).Lock()
 		delete((*cmdChickets).Channel, id)
@@ -141,8 +144,6 @@ func sendResult(submits types.SubmitsGORM, result types.ResultGORM) {
 			Update("execution_time", gorm.Expr("NULL")).
 			Update("compile_error", result.CompileError)
 	}
-
-	<-util.JudgeNumberLimit
 }
 
 func compile(submitID string, containerIPAddress string, langConfig langconf.LanguageConfig, sessionIDchan *chan types.CmdResultJSON) (types.CmdResultJSON, error) {
@@ -204,16 +205,18 @@ func tryTestcase(ctx context.Context, submits types.SubmitsGORM, langConfig lang
 	result.TestcaseResultsMap = make(map[int64]types.TestcaseResultsGORM)
 
 	for _, elem := range testcases {
+		req := types.RequestJSON{
+			Mode:      "judge",
+			Cmd:       langConfig.ExecuteCmd,
+			SessionID: fmt.Sprintf("%d", submits.ID),
+			ProblemID: fmt.Sprintf("%d", submits.ProblemID),
+			Filename:  langConfig.FileName,
+			Testcase:  elem,
+			Problem:   problem,
+			TimeLimit: 6000,
+		}
 		recv, err := cmdlib.RequestCmd(
-			types.RequestJSON{
-				Mode:      "judge",
-				Cmd:       langConfig.ExecuteCmd,
-				SessionID: fmt.Sprintf("%d", submits.ID),
-				ProblemID: fmt.Sprintf("%d", submits.ProblemID),
-				Filename:  langConfig.FileName,
-				Testcase:  elem,
-				Problem:   problem,
-			},
+			req,
 			containerIPAddress,
 			sessionIDChan,
 		)
@@ -221,7 +224,7 @@ func tryTestcase(ctx context.Context, submits types.SubmitsGORM, langConfig lang
 			return types.ResultGORM{}, err
 		}
 
-		if recv.Timeout {
+		if recv.Timeout { // コンテナにリクエストが送れなかったとき
 			result.Status = "TLE"
 			db.
 				Table("submits").
@@ -232,7 +235,7 @@ func tryTestcase(ctx context.Context, submits types.SubmitsGORM, langConfig lang
 					SubmitID:      submits.ID,
 					TestcaseID:    elem.TestcaseID,
 					Status:        "TLE",
-					ExecutionTime: 2200,
+					ExecutionTime: req.TimeLimit,
 					CreatedAt:     util.TimeToString(time.Now()),
 					UpdatedAt:     util.TimeToString(time.Now()),
 				}
