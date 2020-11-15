@@ -90,7 +90,7 @@ func RequestCmd(request types.RequestJSON, containerIPAddress string, sessionIDC
 			fmt.Println("Request timed out")
 			return types.CmdResultJSON{
 				SessionID: request.SessionID,
-				Time:      2200,
+				Time:      request.TimeLimit,
 				Timeout:   true,
 			}, nil
 		case recv := <-*sessionIDChan:
