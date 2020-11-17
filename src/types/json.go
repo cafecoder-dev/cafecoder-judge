@@ -27,3 +27,10 @@ type RequestJSON struct {
 	Testcase  TestcaseGORM `json:"testcase"`
 	Problem   ProblemsGORM `json:"problem"`
 }
+
+type LanguageConfigJSON struct {
+	Name       string `json:"name"`
+	CompileCmd string `json:"compile_cmd"`
+	ExecuteCmd string `json:"execute_cmd"`
+	Filename   string `json:"filename"`
+}

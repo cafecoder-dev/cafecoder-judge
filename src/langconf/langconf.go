@@ -11,10 +11,34 @@ type LanguageConfig struct {
 }
 
 // todo json 化
-func LangConfig(lang string) (LanguageConfig, error) {
+func LangConfig(langID string) (LanguageConfig, error) {
+	/*
+		var languageConfigs []types.LanguageConfigJSON
+		bytes, err := ioutil.ReadFile("language_configs.json")
+		if err != nil {
+			return LanguageConfig{}, err
+		}
+
+		if err := json.Unmarshal(bytes, &languageConfigs); err != nil {
+			return LanguageConfig{}, err
+		}
+
+		for _, langConf := range languageConfigs {
+			if langConf.Name == langID {
+				return LanguageConfig{
+					FileName:   langConf.Name,
+					CompileCmd: langConf.CompileCmd,
+					ExecuteCmd: langConf.ExecuteCmd,
+				}, nil
+			}
+		}
+
+		return LanguageConfig{}, errors.New("undefine language")
+	*/
+
 	langConfig := LanguageConfig{}
 
-	switch lang {
+	switch langID {
 	case "c17_gcc10": //C17
 		langConfig.CompileCmd = "gcc-10 Main.c -O2 -lm -std=gnu17 -o Main.out 2> userStderr.txt"
 		langConfig.ExecuteCmd = "./Main.out < testcase.txt > userStdout.txt 2> userStderr.txt"
@@ -39,11 +63,15 @@ func LangConfig(lang string) (LanguageConfig, error) {
 		langConfig.CompileCmd = "python3 -m py_compile Main.py 2> userStderr.txt"
 		langConfig.ExecuteCmd = "python3 Main.py < testcase.txt > userStdout.txt 2> userStderr.txt"
 		langConfig.FileName = "Main.py"
+	case "pypy3_73": //pypy3
+		langConfig.CompileCmd = "python3 -m py_compile Main.py 2> userStderr.txt"
+		langConfig.ExecuteCmd = "python3 Main.py < testcase.txt > userStdout.txt 2> userStderr.txt"
+		langConfig.FileName = "Main.py"
 	case "cs_mono6": //C#
 		langConfig.CompileCmd = "mcs Main.cs -out:Main.exe 2> userStderr.txt"
 		langConfig.ExecuteCmd = "mono Main.exe < testcase.txt > userStdout.txt 2> userStderr.txt"
 		langConfig.FileName = "Main.cs"
-	case "cs_dotnet31": // C#
+	case "cs_dotnet50": // C#
 		langConfig.CompileCmd = "cd Main && dotnet new console && mv ./../Main.cs Program.cs && dotnet publish -c Release --nologo -v q -o . 2> ../userStderr.txt && cd /"
 		langConfig.ExecuteCmd = "dotnet ./Main/Main.dll < testcase.txt > userStdout.txt 2> userStderr.txt"
 		langConfig.FileName = "Main.cs"
@@ -67,11 +95,11 @@ func LangConfig(lang string) (LanguageConfig, error) {
 		langConfig.CompileCmd = "kotlinc ./Main.kt -include-runtime -d Main.jar 2> userStderr.txt"
 		langConfig.ExecuteCmd = "kotlin Main.jar < testcase.txt > userStdout.txt 2> userStderr.txt"
 		langConfig.FileName = "Main.kt"
-	case "fortlan_10":
+	case "gfortlan_10":
 		langConfig.CompileCmd = "gfortran -O2 Main.f90 -o Main.out 2> userStderr.txt"
 		langConfig.ExecuteCmd = "./Main.out < testcase.txt > userStdout.txt 2> userStderr.txt"
 		langConfig.FileName = "Main.f90"
-	case "Perl_5":
+	case "Perl5":
 		langConfig.CompileCmd = "perl -c Main.pl 2> userStderr.txt"
 		langConfig.ExecuteCmd = "perl Main.pl < testcase.txt > userStdout.txt 2> userStderr.txt"
 		langConfig.FileName = "Main.pl"
@@ -79,7 +107,7 @@ func LangConfig(lang string) (LanguageConfig, error) {
 		langConfig.CompileCmd = "source ~/.profile && perl6 -c Main.pl 2> userStderr.txt"
 		langConfig.ExecuteCmd = "source ~/.profile && perl6 Main.pl < testcase.txt > userStdout.txt 2> userStderr.txt"
 		langConfig.FileName = "Main.p6"
-	case "crystal_0":
+	case "crystal_035":
 		langConfig.CompileCmd = "crystal build Main.cr 2> userStderr.txt"
 		langConfig.ExecuteCmd = "./Main.cr < testcase.txt > userStdout.txt 2> userStderr.txt"
 		langConfig.FileName = "Main.cr"
@@ -91,7 +119,6 @@ func LangConfig(lang string) (LanguageConfig, error) {
 		langConfig.CompileCmd = "bash -n Main.sh 2> userStderr.txt"
 		langConfig.ExecuteCmd = "./Main.sh < testcase.txt > userStdout.txt 2> userStderr.txt"
 		langConfig.FileName = "Main.sh"
-
 	default:
 		return langConfig, errors.New("undefined language")
 	}
