@@ -64,8 +64,8 @@ func LangConfig(langID string) (LanguageConfig, error) {
 		langConfig.ExecuteCmd = "python3 Main.py < testcase.txt > userStdout.txt 2> userStderr.txt"
 		langConfig.FileName = "Main.py"
 	case "pypy3_73": //pypy3
-		langConfig.CompileCmd = "python3 -m py_compile Main.py 2> userStderr.txt"
-		langConfig.ExecuteCmd = "python3 Main.py < testcase.txt > userStdout.txt 2> userStderr.txt"
+		langConfig.CompileCmd = "pypy3 -m py_compile Main.py 2> userStderr.txt"
+		langConfig.ExecuteCmd = "pypy3 Main.py < testcase.txt > userStdout.txt 2> userStderr.txt"
 		langConfig.FileName = "Main.py"
 	case "cs_mono6": //C#
 		langConfig.CompileCmd = "mcs Main.cs -out:Main.exe 2> userStderr.txt"
@@ -84,8 +84,8 @@ func LangConfig(langID string) (LanguageConfig, error) {
 		langConfig.ExecuteCmd = "./Main.out < testcase.txt > userStdout.txt 2> userStderr.txt"
 		langConfig.FileName = "Main.nim"
 	case "rust_147":
-		langConfig.CompileCmd = "rustc -O -o Main.out Main.rs 2> userStderr.txt"
-		langConfig.ExecuteCmd = "./Main.out < testcase.txt > userStdout.txt 2> userStderr.txt"
+		langConfig.CompileCmd = "cd rust_workspace && mv /Main.rs ./src/main.rs && cargo build --release 2> /userStderr.txt && cd /"
+		langConfig.ExecuteCmd = "./rust_workspace/target/release/Rust < testcase.txt > userStdout.txt 2> userStderr.txt"
 		langConfig.FileName = "Main.rs"
 	case "ruby_27":
 		langConfig.CompileCmd = "ruby -w -c ./Main.rb 2> userStderr.txt"
@@ -104,12 +104,12 @@ func LangConfig(langID string) (LanguageConfig, error) {
 		langConfig.ExecuteCmd = "perl Main.pl < testcase.txt > userStdout.txt 2> userStderr.txt"
 		langConfig.FileName = "Main.pl"
 	case "Raku_2010":
-		langConfig.CompileCmd = "source ~/.profile && perl6 -c Main.pl 2> userStderr.txt"
-		langConfig.ExecuteCmd = "source ~/.profile && perl6 Main.pl < testcase.txt > userStdout.txt 2> userStderr.txt"
+		langConfig.CompileCmd = "perl6 -c Main.pl 2> userStderr.txt"
+		langConfig.ExecuteCmd = "perl6 Main.pl < testcase.txt > userStdout.txt 2> userStderr.txt"
 		langConfig.FileName = "Main.p6"
 	case "crystal_035":
 		langConfig.CompileCmd = "crystal build Main.cr 2> userStderr.txt"
-		langConfig.ExecuteCmd = "./Main.cr < testcase.txt > userStdout.txt 2> userStderr.txt"
+		langConfig.ExecuteCmd = "./Main < testcase.txt > userStdout.txt 2> userStderr.txt"
 		langConfig.FileName = "Main.cr"
 	case "cat_8":
 		langConfig.CompileCmd = ":"
