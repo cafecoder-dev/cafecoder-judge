@@ -63,7 +63,7 @@ func LangConfig(langID string) (LanguageConfig, error) {
 		langConfig.CompileCmd = "python3.9 -m py_compile Main.py 2> userStderr.txt"
 		langConfig.ExecuteCmd = "python3.9 Main.py < testcase.txt > userStdout.txt 2> userStderr.txt"
 		langConfig.FileName = "Main.py"
-	case "pypy3:3.7.7": //pypy3
+	case "pypy3:3.7.9": //pypy3
 		langConfig.CompileCmd = "pypy3 -m py_compile Main.py 2> userStderr.txt"
 		langConfig.ExecuteCmd = "pypy3 Main.py < testcase.txt > userStdout.txt 2> userStderr.txt"
 		langConfig.FileName = "Main.py"
@@ -83,7 +83,7 @@ func LangConfig(langID string) (LanguageConfig, error) {
 		langConfig.CompileCmd = "nim cpp -d:release --opt:speed --multimethods:on -o:Main.out Main.nim 2> userStderr.txt"
 		langConfig.ExecuteCmd = "./Main.out < testcase.txt > userStdout.txt 2> userStderr.txt"
 		langConfig.FileName = "Main.nim"
-	case "rust:1.47.0":
+	case "rust:1.48.0":
 		langConfig.CompileCmd = "cd rust_workspace && mv /Main.rs ./src/main.rs && cargo build --release 2> /userStderr.txt && cd /"
 		langConfig.ExecuteCmd = "./rust_workspace/target/release/Rust < testcase.txt > userStdout.txt 2> userStderr.txt"
 		langConfig.FileName = "Main.rs"
@@ -91,7 +91,7 @@ func LangConfig(langID string) (LanguageConfig, error) {
 		langConfig.CompileCmd = "ruby -w -c ./Main.rb 2> userStderr.txt"
 		langConfig.ExecuteCmd = "ruby ./Main.rb < testcase.txt > userStdout.txt 2> userStderr.txt"
 		langConfig.FileName = "Main.rb"
-	case "kotlin:1.14.10":
+	case "kotlin:1.4.10":
 		langConfig.CompileCmd = "kotlinc ./Main.kt -include-runtime -d Main.jar 2> userStderr.txt"
 		langConfig.ExecuteCmd = "kotlin Main.jar < testcase.txt > userStdout.txt 2> userStderr.txt"
 		langConfig.FileName = "Main.kt"
@@ -99,11 +99,11 @@ func LangConfig(langID string) (LanguageConfig, error) {
 		langConfig.CompileCmd = "gfortran-10 -O2 Main.f90 -o Main.out 2> userStderr.txt"
 		langConfig.ExecuteCmd = "./Main.out < testcase.txt > userStdout.txt 2> userStderr.txt"
 		langConfig.FileName = "Main.f90"
-	case "perl:5.30.3":
+	case "perl:5.30.0":
 		langConfig.CompileCmd = "perl -c Main.pl 2> userStderr.txt"
 		langConfig.ExecuteCmd = "perl Main.pl < testcase.txt > userStdout.txt 2> userStderr.txt"
 		langConfig.FileName = "Main.pl"
-	case "raku:2020.09":
+	case "raku:2020.10":
 		langConfig.CompileCmd = "perl6 -c Main.pl 2> userStderr.txt"
 		langConfig.ExecuteCmd = "perl6 Main.pl < testcase.txt > userStdout.txt 2> userStderr.txt"
 		langConfig.FileName = "Main.p6"
