@@ -68,28 +68,28 @@ func LangConfig(langID string) (LanguageConfig, error) {
 		langConfig.ExecuteCmd = "pypy3 Main.py < testcase.txt > userStdout.txt 2> userStderr.txt"
 		langConfig.FileName = "Main.py"
 	case "cs_mono:6.12.0.90": //C#
-		langConfig.CompileCmd = "mcs Main.cs -out:Main.exe 2> userStderr.txt"
-		langConfig.ExecuteCmd = "mono Main.exe < testcase.txt > userStdout.txt 2> userStderr.txt"
+		langConfig.CompileCmd = "source ~/.profile && mcs Main.cs -out:Main.exe 2> userStderr.txt"
+		langConfig.ExecuteCmd = "source ~/.profile && mono Main.exe < testcase.txt > userStdout.txt 2> userStderr.txt"
 		langConfig.FileName = "Main.cs"
 	case "cs_dotnet:5.0": // C#
-		langConfig.CompileCmd = "cd Main && dotnet new console && mv ./../Main.cs Program.cs && dotnet publish -c Release --nologo -v q -o . 2> ../userStderr.txt && cd /"
-		langConfig.ExecuteCmd = "dotnet ./Main/Main.dll < testcase.txt > userStdout.txt 2> userStderr.txt"
+		langConfig.CompileCmd = "source ~/.profile && cd Main && dotnet new console && mv ./../Main.cs Program.cs && dotnet publish -c Release --nologo -v q -o . 2> ../userStderr.txt && cd /"
+		langConfig.ExecuteCmd = "source ~/.profile && dotnet ./Main/Main.dll < testcase.txt > userStdout.txt 2> userStderr.txt"
 		langConfig.FileName = "Main.cs"
 	case "go:1.15.5": //golang
-		langConfig.CompileCmd = "mv Main.go Main && cd Main && go build Main.go 2> ../userStderr.txt"
+		langConfig.CompileCmd = "source ~/.profile && mv Main.go Main && cd Main && go build Main.go 2> ../userStderr.txt"
 		langConfig.ExecuteCmd = "./Main/Main < testcase.txt > userStdout.txt 2> userStderr.txt"
 		langConfig.FileName = "Main.go"
 	case "nim:1.4.0":
-		langConfig.CompileCmd = "nim cpp -d:release --opt:speed --multimethods:on -o:Main.out Main.nim 2> userStderr.txt"
+		langConfig.CompileCmd = "source ~/.profile && nim cpp -d:release --opt:speed --multimethods:on -o:Main.out Main.nim 2> userStderr.txt"
 		langConfig.ExecuteCmd = "./Main.out < testcase.txt > userStdout.txt 2> userStderr.txt"
 		langConfig.FileName = "Main.nim"
 	case "rust:1.48.0":
-		langConfig.CompileCmd = "cd rust_workspace && mv /Main.rs ./src/main.rs && cargo build --release 2> /userStderr.txt && cd /"
+		langConfig.CompileCmd = "source ~/.profile && cd rust_workspace && mv /Main.rs ./src/main.rs && cargo build --release 2> /userStderr.txt && cd /"
 		langConfig.ExecuteCmd = "./rust_workspace/target/release/Rust < testcase.txt > userStdout.txt 2> userStderr.txt"
 		langConfig.FileName = "Main.rs"
 	case "ruby:2.7.2":
-		langConfig.CompileCmd = "ruby -w -c ./Main.rb 2> userStderr.txt"
-		langConfig.ExecuteCmd = "ruby ./Main.rb < testcase.txt > userStdout.txt 2> userStderr.txt"
+		langConfig.CompileCmd = "source ~/.profile && ruby -w -c ./Main.rb 2> userStderr.txt"
+		langConfig.ExecuteCmd = "source ~/.profile && ruby ./Main.rb < testcase.txt > userStdout.txt 2> userStderr.txt"
 		langConfig.FileName = "Main.rb"
 	case "kotlin:1.4.10":
 		langConfig.CompileCmd = "kotlinc ./Main.kt -include-runtime -d Main.jar 2> userStderr.txt"
@@ -104,8 +104,8 @@ func LangConfig(langID string) (LanguageConfig, error) {
 		langConfig.ExecuteCmd = "perl Main.pl < testcase.txt > userStdout.txt 2> userStderr.txt"
 		langConfig.FileName = "Main.pl"
 	case "raku:2020.10":
-		langConfig.CompileCmd = "perl6 -c Main.pl 2> userStderr.txt"
-		langConfig.ExecuteCmd = "perl6 Main.pl < testcase.txt > userStdout.txt 2> userStderr.txt"
+		langConfig.CompileCmd = "source ~/.profile && perl6 -c Main.pl 2> userStderr.txt"
+		langConfig.ExecuteCmd = "source ~/.profile && perl6 Main.pl < testcase.txt > userStdout.txt 2> userStderr.txt"
 		langConfig.FileName = "Main.p6"
 	case "crystal:0.35.1":
 		langConfig.CompileCmd = "crystal build Main.cr 2> userStderr.txt"
