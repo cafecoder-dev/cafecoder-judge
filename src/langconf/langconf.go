@@ -117,7 +117,7 @@ func LangConfig(langID string) (LanguageConfig, error) {
 		langConfig.FileName = "Main.txt"
 	case "bash:5.0.17":
 		langConfig.CompileCmd = "bash -n Main.sh 2> userStderr.txt"
-		langConfig.ExecuteCmd = "./Main.sh < testcase.txt > userStdout.txt 2> userStderr.txt"
+		langConfig.ExecuteCmd = "bash Main.sh < testcase.txt > userStdout.txt 2> userStderr.txt"
 		langConfig.FileName = "Main.sh"
 	default:
 		return langConfig, errors.New("undefined language")
