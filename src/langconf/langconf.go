@@ -108,11 +108,11 @@ func LangConfig(langID string) (LanguageConfig, error) {
 		langConfig.ExecuteCmd = "source ~/.profile && perl6 Main.pl < testcase.txt > userStdout.txt 2> userStderr.txt"
 		langConfig.FileName = "Main.p6"
 	case "crystal:0.35.1":
-		langConfig.CompileCmd = "crystal build Main.cr 2> userStderr.txt"
-		langConfig.ExecuteCmd = "./Main < testcase.txt > userStdout.txt 2> userStderr.txt"
+		langConfig.CompileCmd = "crystal build Main.cr -o Main.out 2> userStderr.txt"
+		langConfig.ExecuteCmd = "./Main.out < testcase.txt > userStdout.txt 2> userStderr.txt"
 		langConfig.FileName = "Main.cr"
 	case "text_cat:8.30":
-		langConfig.CompileCmd = ":"
+		langConfig.CompileCmd = ": 2> userStderr.txt"
 		langConfig.ExecuteCmd = "cat Main.txt > userStdout.txt 2> userStderr.txt"
 		langConfig.FileName = "Main.txt"
 	case "bash:5.0.17":
