@@ -92,8 +92,8 @@ func LangConfig(langID string) (LanguageConfig, error) {
 		langConfig.ExecuteCmd = "source ~/.profile && ruby ./Main.rb < testcase.txt > userStdout.txt 2> userStderr.txt"
 		langConfig.FileName = "Main.rb"
 	case "kotlin:1.4.10":
-		langConfig.CompileCmd = "kotlinc ./Main.kt -include-runtime -d Main.jar 2> userStderr.txt"
-		langConfig.ExecuteCmd = "kotlin Main.jar < testcase.txt > userStdout.txt 2> userStderr.txt"
+		langConfig.CompileCmd = "source ~/.profile && kotlinc ./Main.kt -include-runtime -d Main.jar 2> userStderr.txt"
+		langConfig.ExecuteCmd = "source ~/.profile && kotlin Main.jar < testcase.txt > userStdout.txt 2> userStderr.txt"
 		langConfig.FileName = "Main.kt"
 	case "fortran:10.2.0":
 		langConfig.CompileCmd = "gfortran-10 -O2 Main.f90 -o Main.out 2> userStderr.txt"
@@ -104,8 +104,8 @@ func LangConfig(langID string) (LanguageConfig, error) {
 		langConfig.ExecuteCmd = "perl Main.pl < testcase.txt > userStdout.txt 2> userStderr.txt"
 		langConfig.FileName = "Main.pl"
 	case "raku:2020.10":
-		langConfig.CompileCmd = "source ~/.profile && perl6 -c Main.pl 2> userStderr.txt"
-		langConfig.ExecuteCmd = "source ~/.profile && perl6 Main.pl < testcase.txt > userStdout.txt 2> userStderr.txt"
+		langConfig.CompileCmd = "source ~/.profile && perl6 -c Main.p6 2> userStderr.txt"
+		langConfig.ExecuteCmd = "source ~/.profile && perl6 Main.p6 < testcase.txt > userStdout.txt 2> userStderr.txt"
 		langConfig.FileName = "Main.p6"
 	case "crystal:0.35.1":
 		langConfig.CompileCmd = "crystal build Main.cr -o Main.out 2> userStderr.txt"
