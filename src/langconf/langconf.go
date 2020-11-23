@@ -63,7 +63,7 @@ func LangConfig(langID string) (LanguageConfig, error) {
 		langConfig.CompileCmd = "python3.9 -m py_compile Main.py 2> userStderr.txt"
 		langConfig.ExecuteCmd = "python3.9 Main.py < testcase.txt > userStdout.txt 2> userStderr.txt"
 		langConfig.FileName = "Main.py"
-	case "pypy3:3.7.9": //pypy3
+	case "pypy3:7.3.3": //pypy3
 		langConfig.CompileCmd = "pypy3 -m py_compile Main.py 2> userStderr.txt"
 		langConfig.ExecuteCmd = "pypy3 Main.py < testcase.txt > userStdout.txt 2> userStderr.txt"
 		langConfig.FileName = "Main.py"
