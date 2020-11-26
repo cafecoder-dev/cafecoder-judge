@@ -20,14 +20,16 @@ func main() {
 	cmdChickets := cmdlib.CmdTicket{Channel: make(map[string]chan types.CmdResultJSON)}
 	go cmdlib.ManageCmds(&cmdChickets)
 
-	for {
-		var res []types.SubmitsGORM
-
-		db, err := sqllib.NewDB()
+	db, err := sqllib.NewDB()
 		if err != nil {
 			log.Fatal(err)
 		}
 
+
+	for {
+		var res []types.SubmitsGORM
+
+		
 		db.Table("submits").
 			Where("deleted_at IS NULL").
 			Where("status='WR' OR status='WJ'").
