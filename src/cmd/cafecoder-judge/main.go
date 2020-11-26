@@ -28,11 +28,11 @@ func main() {
 	for {
 		var res []types.SubmitsGORM
 
-		if err := db.Table("submits").
+		if result := db.Table("submits").
 			Where("deleted_at IS NULL").
 			Where("status='WR' OR status='WJ'").
 			Order("updated_at").
-			Find(&res); err != nil {
+			Find(&res); result.Error != nil {
 			log.Fatal(err)
 		}
 
