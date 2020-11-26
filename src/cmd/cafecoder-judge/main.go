@@ -21,20 +21,20 @@ func main() {
 	go cmdlib.ManageCmds(&cmdChickets)
 
 	db, err := sqllib.NewDB()
-		if err != nil {
-			log.Fatal(err)
-		}
-
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	for {
 		var res []types.SubmitsGORM
 
-		
-		db.Table("submits").
+		if err := db.Table("submits").
 			Where("deleted_at IS NULL").
 			Where("status='WR' OR status='WJ'").
 			Order("updated_at").
-			Find(&res)
+			Find(&res); err != nil {
+			log.Fatal(err)
+		}
 
 		for _, elem := range res {
 			cmdChickets.Lock()
