@@ -1,0 +1,74 @@
+[
+    {
+        "name": "template",
+        "compile_cmd": "compile_cmd 2> userStderr.txt",
+        "execute_cmd": "execute_cmd < testcase.txt > userStdout.txt 2> userStderr.txt",
+        "filename": "Main.ext"
+    },
+    {
+        "name": "c17_gcc10",
+        "compile_cmd": "gcc-10 Main.c -O2 -lm -std=gnu17 -o Main.out 2> userStderr.txt",
+        "execute_cmd": "./Main.out < testcase.txt > userStdout.txt 2> userStderr.txt",
+        "filename": "Main.c"
+    },
+    {
+        "name": "",
+        "compile_cmd": "",
+        "execute_cmd": "",
+        "filename": ""
+    },
+    {
+        "name": "",
+        "compile_cmd": "",
+        "execute_cmd": "",
+        "filename": ""
+    },
+    {
+        "name": "",
+        "compile_cmd": "",
+        "execute_cmd": "",
+        "filename": ""
+    },
+    {
+        "name": "",
+        "compile_cmd": "",
+        "execute_cmd": "",
+        "filename": ""
+    },
+    {
+        "name": "",
+        "compile_cmd": "",
+        "execute_cmd": "",
+        "filename": ""
+    },
+    {
+        "name": "",
+        "compile_cmd": "",
+        "execute_cmd": "",
+        "filename": ""
+    },
+    {
+        "name": "",
+        "compile_cmd": "",
+        "execute_cmd": "",
+        "filename": ""
+    },
+    {
+        "name": "",
+        "compile_cmd": "",
+        "execute_cmd": "",
+        "filename": ""
+    },
+    {
+        "name": "",
+        "compile_cmd": "",
+        "execute_cmd": "",
+        "filename": ""
+    },
+    {
+        "name": "",
+        "compile_cmd": "",
+        "execute_cmd": "",
+        "filename": ""
+    }
+]
