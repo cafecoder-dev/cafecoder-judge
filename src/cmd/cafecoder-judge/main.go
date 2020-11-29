@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/cafecoder-dev/cafecoder-judge/src/cmdlib"
 	"github.com/cafecoder-dev/cafecoder-judge/src/judgelib"
@@ -24,6 +25,8 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	ticker := time.NewTicker(time.Minute * 5)
 
 	for {
 		var res []types.SubmitsGORM
@@ -54,5 +57,11 @@ func main() {
 				go judgelib.Judge(elem, &cmdChickets)
 			}
 		}
+
+		select {
+		case <-ticker.C:
+			fmt.Println(len(util.JudgeNumberLimit))
+		}
+
 	}
 }
