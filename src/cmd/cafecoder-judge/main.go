@@ -3,19 +3,29 @@ package main
 import (
 	"fmt"
 	"log"
+	"strconv"
 
 	"github.com/cafecoder-dev/cafecoder-judge/src/cmdlib"
 	"github.com/cafecoder-dev/cafecoder-judge/src/judgelib"
 	"github.com/cafecoder-dev/cafecoder-judge/src/sqllib"
 	"github.com/cafecoder-dev/cafecoder-judge/src/types"
-	"github.com/cafecoder-dev/cafecoder-judge/src/util"
 	_ "github.com/go-sql-driver/mysql"
 )
 
+// JudgeNumberLimit ... limits the number of judges
+//
+// see: https://mattn.kaoriya.net/software/lang/go/20171221111857.htm
+var MaxJudge string
+var JudgeNumberLimit chan struct{}
+
 func main() {
-	if err := util.SetJudgeNumberLimit(); err != nil {
+	m, err := strconv.Atoi(MaxJudge)
+	if err != nil {
 		log.Fatal(err)
 	}
+
+	JudgeNumberLimit = make(chan struct{}, m)
+	fmt.Println(len(JudgeNumberLimit))
 
 	cmdChickets := cmdlib.CmdTicket{Channel: make(map[string]chan types.CmdResultJSON)}
 	go cmdlib.ManageCmds(&cmdChickets)
@@ -45,7 +55,7 @@ func main() {
 				continue
 			} else {
 				// wait until the number of judges becomes less than maxJudge
-				util.JudgeNumberLimit <- struct{}{}
+				JudgeNumberLimit <- struct{}{}
 
 				cmdChickets.Lock()
 				cmdChickets.Channel[fmt.Sprintf("%d", elem.ID)] = make(chan types.CmdResultJSON)
@@ -53,7 +63,7 @@ func main() {
 
 				go func() {
 					judgelib.Judge(elem, &cmdChickets)
-					<-util.JudgeNumberLimit
+					<-JudgeNumberLimit
 				}()
 			}
 		}

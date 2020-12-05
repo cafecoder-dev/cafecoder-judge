@@ -1,2 +1,5 @@
-debug: ./cafecoder-judge/main.go
-	go build --race -o ./../.. ./cafecoder-judge
+build: ./cafecoder-judge/main.go
+	go \
+		build \
+		-ldflags="-X main.MaxJudge=1" \
+		-o ./../.. ./cafecoder-judge
