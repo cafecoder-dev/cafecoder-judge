@@ -25,7 +25,6 @@ func main() {
 	}
 
 	JudgeNumberLimit = make(chan struct{}, m)
-	fmt.Println(len(JudgeNumberLimit))
 
 	cmdChickets := cmdlib.CmdTicket{Channel: make(map[string]chan types.CmdResultJSON)}
 	go cmdlib.ManageCmds(&cmdChickets)
