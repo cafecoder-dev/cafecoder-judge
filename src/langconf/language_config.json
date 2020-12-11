@@ -1,0 +1,10 @@
+{
+    "language_config": [
+        {
+            "language_id": "c17_gcc10",
+            "compile_command": "gcc-10 Main.c -O2 -lm -std=gnu17 -o Main.out",
+            "execute_command": "./Main.out",
+            "file_name": "Main.c"
+        }
+    ]
+}

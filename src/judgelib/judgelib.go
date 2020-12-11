@@ -22,8 +22,6 @@ var priorityMap = map[string]int{"-": 0, "AC": 2, "TLE": 3, "MLE": 4, "OLE": 5, 
 
 // Judge ... ジャッジのフロー
 func Judge(submits types.SubmitsGORM, cmdChickets *cmdlib.CmdTicket) {
-	defer func() { <-util.JudgeNumberLimit }()
-
 	result := types.ResultGORM{Status: "-"}
 
 	ctx := context.Background()
