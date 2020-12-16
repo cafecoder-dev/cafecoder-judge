@@ -26,6 +26,7 @@ func scoring(submits types.SubmitsGORM, result types.ResultGORM) int64 {
 
 	db.
 		Table("testcase_sets").
+		Where("deleted_at IS NULL").
 		Where("problem_id=?", submits.ProblemID).
 		Find(&testcaseSets)
 	db.
