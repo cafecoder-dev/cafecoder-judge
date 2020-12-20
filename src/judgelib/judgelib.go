@@ -45,7 +45,14 @@ func Judge(submits types.SubmitsGORM, cmdChickets *cmdlib.CmdTicket) {
 		(*cmdChickets).Unlock()
 	}()
 
-	containerName := util.MakeStringHash(id)
+	// containerName := util.MakeStringHash(id)
+	containerName, err := util.MakeRandomString(32)
+	if err != nil {
+		fmt.Printf("%s\n", err.Error())
+		result.Status = "IE"
+		sendResult(submits, result)
+		return
+	}
 
 	container, err := dkrlib.CreateContainer(ctx, containerName)
 	if err != nil {
