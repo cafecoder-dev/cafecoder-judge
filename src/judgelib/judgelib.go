@@ -43,7 +43,8 @@ func Judge(submits types.SubmitsGORM, cmdChickets *cmdlib.CmdTicket) {
 		(*cmdChickets).Unlock()
 	}()
 
-	containerName := util.MakeStringHash(id)
+	//containerName := util.MakeStringHash(id)
+	containerName := util.GenRandomString(32)
 
 	container, err := dkrlib.CreateContainer(ctx, containerName)
 	if err != nil {

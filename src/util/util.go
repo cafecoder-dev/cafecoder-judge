@@ -1,11 +1,13 @@
 package util
 
 import (
-	"fmt"
-	"time"
-	"regexp"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
+	"math/big"
+	"regexp"
+	"time"
 
 	"github.com/cafecoder-dev/cafecoder-judge/src/types"
 )
@@ -35,4 +37,16 @@ func TimeToString(t time.Time) string {
 func MakeStringHash(str string) string {
 	hash := sha256.Sum256([]byte(str))
 	return hex.EncodeToString(hash[:])
+}
+
+func GenRandomString(digit int) string {
+	const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
+	s := ""
+	for i := 0; i < digit; i++ {
+		n, _ := rand.Int(rand.Reader, big.NewInt(int64(len(letters))))
+		s += string(letters[n.Int64()])
+	}
+
+	return s
 }
